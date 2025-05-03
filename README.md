@@ -13,12 +13,17 @@ Welcome to the **Antz** monorepo! This repository contains multiple projects, wi
 antz/
 │
 ├── ANT-SDK_Mac.3.5/          # Main project for ANT+ SDK on macOS
-│   ├── CMakeLists.txt        # CMake build configuration
-│   ├── README.md             # Project-specific documentation (optional)
 │   ├── Bin/*                 # Ant+ binaries to include in other projects 
 │   ├── Bin/demo_lib          # Statically linked demo executable 
 │   ├── Bin/demo_dylib        # Dynamically linked demo executable 
+│   ├── CMakeLists.txt        # CMake build configuration
+│   ├── README.md             # Project-specific documentation (optional)
 │   └── ...                   # Source code, libraries, binaries, etc.
+├── ant_discovery/            # Test project for ant discovery methods
+│   ├── include/*             # Discovery header files
+│   ├── src/*                 # Discovery implementations
+│   ├── Bin/*                 # Ant+ binaries to include in other projects 
+│   ├── CMakeLists.txt        # CMake build configuration for ant discovery binary
 │
 └── README.md                 # This file
 ```
@@ -94,6 +99,10 @@ cmake --build build --target clean_build
 * `demo_lib` statically links against `libantbase.a`
 * `demo_dylib` dynamically links against `libantbase_shared.dylib`
 * `demo_dll` dynamically links against `libant.dylib`
+
+## Ant+ discovery project
+
+Simple test project for algorithms for discovery of ant devices
 
 ## License
 
