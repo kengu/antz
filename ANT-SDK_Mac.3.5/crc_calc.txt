@@ -1,0 +1,8 @@
+grep -R "CRC_Calc16" ANT_LIB/
+ANT_LIB/software/ANTFS/antfs_client_channel.cpp:               usTransferCrc = CRC_Calc16(pucDownloadData, ulTransferBurstIndex);
+ANT_LIB/software/ANTFS/antfs_host_channel.cpp:                  usCRCCalc = CRC_Calc16(&pucTransferBuffer[16], ulDataOffset-ulTransferDataOffset);  //CRC_UpdateCRC16
+ANT_LIB/software/ANTFS/antfs_host_channel.cpp:               usCalcCRC = CRC_Calc16(&pucTransferBufferDynamic[16], ulLength);  //Calculate the CRC of the received data from the start, this should always be what the CRC value is based in becaue we pass in the initial seed
+ANT_LIB/software/ANTFS/antfs_host_channel.cpp:         usCRCSeed = CRC_Calc16(&pucUploadData[0], ulLastOffset-ulTransferDataOffset);
+ANT_LIB/software/ANTFS/antfs_host_channel.cpp:         usCalculatedCRC = CRC_Calc16(&pucUploadData[0], (ulLastOffset - ulTransferDataOffset) + ulLocalTransferSize);  // compute the CRC from the start up till the end of the current block
+ANT_LIB/common/crc.h:USHORT CRC_Calc16(const void *pvDataPtr_, ULONG ulSize_);
+ANT_LIB/common/crc.c:USHORT CRC_Calc16(const void *pvDataPtr_, ULONG ulSize_)

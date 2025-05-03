@@ -1,0 +1,6 @@
+[ 44%] Built target antbase
+[ 88%] Built target antbase_shared
+[ 91%] Built target demo_lib
+[ 94%] Built target demo_dylib
+[ 97%] Built target libant
+[100%] Built target demo_dll

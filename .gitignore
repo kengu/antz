@@ -1,0 +1,25 @@
+# Ignore CMake build artifacts
+.DS_Store
+*build/
+*CMakeFiles/
+CMakeCache.txt
+*cmake_install.cmake
+*Makefile
+
+# Ignore editor/project files
+.idea/
+.vscode/
+*.xcodeproj
+*.xcworkspace
+
+# Ignore logs
+*.log
+
+# Ignore generated compile_commands.json (optional)
+compile_commands.json
+
+# Keep distributed binaries in Bin/
+# But ignore intermediate garbage files in Bin
+/Bin/*.o
+/Bin/*.tmp
+/Bin/*~
