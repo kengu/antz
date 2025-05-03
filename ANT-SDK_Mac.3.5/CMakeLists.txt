@@ -9,18 +9,18 @@ set(CMAKE_BUILD_TYPE Debug)
 
 # Include directories
 include_directories(
-    ${CMAKE_SOURCE_DIR}/ANT_LIB
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/common
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/inc
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/ANTFS
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/Serial
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/Serial/device_management
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/System
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/USB
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/USB/devices
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/USB/device_handles
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/USB/iokit_driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/ANTFS
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/Serial
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/Serial/device_management
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/System
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/USB
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/USB/devices
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/USB/device_handles
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/USB/iokit_driver
 )
 
 # Global defines
@@ -39,11 +39,11 @@ file(GLOB_RECURSE ANTBASE_CPP_SRC
 )
 
 set(ANTBASE_C_SRC
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/common/crc.c
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/common/checksum.c
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/system/dsi_convert.c
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/system/dsi_thread_posix.c
-    ${CMAKE_SOURCE_DIR}/ANT_LIB/software/system/macros.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/common/crc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/common/checksum.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/system/dsi_convert.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/system/dsi_thread_posix.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/system/macros.c
 )
 
 # macOS frameworks
@@ -56,6 +56,12 @@ find_library(SYSTEM_C_LIBRARY c)
 # Static library: libantbase.a
 add_library(antbase STATIC ${ANTBASE_C_SRC} ${ANTBASE_CPP_SRC})
 target_link_libraries(antbase PUBLIC ${IOKIT_FRAMEWORK} ${COREFOUNDATION_FRAMEWORK} ${SYSTEM_C_LIBRARY})
+target_include_directories(antbase PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB
+        ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/inc
+)
+
 
 # Shared library: libantbase_shared.dylib
 add_library(antbase_shared SHARED ${ANTBASE_CPP_SRC} ${ANTBASE_C_SRC})
@@ -135,11 +141,16 @@ add_custom_target(clean_build
 
 # Install target to ./Bin
 include(GNUInstallDirs)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/
+        DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/Bin/include
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+#install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/ant.h
+#        DESTINATION ${CMAKE_SOURCE_DIR}/ANT-SDK_Mac.3.5/Bin/include)
 install(TARGETS antbase antbase_shared libant demo_lib demo_dylib demo_dll
-        RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/Bin
-        LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/Bin
-        ARCHIVE DESTINATION ${CMAKE_SOURCE_DIR}/Bin)
+        RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/Bin
+        LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/Bin
+        ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/Bin)
 
 add_custom_target(install_local
-    COMMAND ${CMAKE_COMMAND} --install . --prefix ${CMAKE_SOURCE_DIR}/Bin
+    COMMAND ${CMAKE_COMMAND} --install . --prefix ${CMAKE_CURRENT_SOURCE_DIR}/Bin
     COMMENT "Installing to ./Bin")

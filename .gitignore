@@ -5,6 +5,7 @@
 CMakeCache.txt
 *cmake_install.cmake
 *Makefile
+*cmake-build-debug*
 
 # Ignore editor/project files
 .idea/
