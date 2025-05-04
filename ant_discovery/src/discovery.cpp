@@ -15,9 +15,10 @@
 #include <string>
 #include <map>
 
-constexpr UCHAR USER_ANTCHANNEL_HRM = 0;
-constexpr UCHAR USER_ANTCHANNEL_ASSET = 1;
+constexpr UCHAR USER_CHANNEL_HRM = 0;
+constexpr UCHAR USER_CHANNEL_ASSET = 1;
 constexpr UCHAR USER_NETWORK_NUM = 0;
+constexpr UCHAR USER_CHANNEL_RF_FREQ = 57;
 constexpr ULONG MESSAGE_TIMEOUT = 1000;
 static UCHAR USER_NETWORK_KEY[8] = {
     0xB9, 0xA5, 0x21, 0xFB,
@@ -33,10 +34,10 @@ constexpr uint8_t PAGE_IDENTIFICATION_1 = 0x10;
 constexpr uint8_t PAGE_IDENTIFICATION_2 = 0x11;
 constexpr uint8_t PAGE_REQUEST = 0x46;
 
+
 struct Device {
     uint8_t index;
-    std::string name;
-    std::string shortName;
+    std::string fullName;
     uint8_t icon = 0;
     uint16_t distance = 0;
     float headingDegrees = 0.0f;
@@ -53,6 +54,8 @@ namespace ant {
     static DSISerialGeneric *pclSerial = nullptr;
     static DSIFramerANT *pclANT = nullptr;
     static std::set<uint8_t> knownIndexes;
+    static std::set<uint8_t> discoveredIndexes;
+    static std::set<uint16_t> configuredDevIds;
     static std::map<uint8_t, std::string> partialNames;
     static std::map<uint8_t, int> firstPageCounters;
 
@@ -106,43 +109,48 @@ namespace ant {
         }
 
         // --- Channel 0: HRM (2457 MHz = ch 57) ---
-        if (!pclANT->AssignChannel(USER_ANTCHANNEL_HRM, /*slave=*/0, /*no ack=*/0, MESSAGE_TIMEOUT)) {
+        if (!pclANT->AssignChannel(USER_CHANNEL_HRM, /*slave=*/0, /*no ack=*/USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
             printf("AssignChannel failed\n");
             return false;
         }
-        if (!pclANT->SetChannelID(USER_ANTCHANNEL_HRM, 0, 0, 0, MESSAGE_TIMEOUT)) {
+        if (!pclANT->SetChannelID(USER_CHANNEL_HRM, 0, 0, 0, MESSAGE_TIMEOUT)) {
             printf("SetChannelID failed\n");
             return false;
         }
 
         // Heart Rate message period
-        if (!pclANT->SetChannelPeriod(USER_ANTCHANNEL_HRM, 8070, MESSAGE_TIMEOUT)) {
+        if (!pclANT->SetChannelPeriod(USER_CHANNEL_HRM, 8070, MESSAGE_TIMEOUT)) {
             printf("SetChannelPeriod failed\n");
             return false;
         }
-        if (!pclANT->SetChannelRFFrequency(USER_ANTCHANNEL_HRM, 57, MESSAGE_TIMEOUT)) {
+        if (!pclANT->SetChannelRFFrequency(USER_CHANNEL_HRM, USER_CHANNEL_RF_FREQ, MESSAGE_TIMEOUT)) {
             printf("SetChannelRFFrequency failed\n");
             return false;
         }
-        if (!pclANT->OpenChannel(USER_ANTCHANNEL_HRM, MESSAGE_TIMEOUT)) {
+        if (!pclANT->OpenChannel(USER_CHANNEL_HRM, MESSAGE_TIMEOUT)) {
             printf("OpenChannel failed\n");
             return false;
         }
 
-        // --- Channel 1: Garmin Asset/GPS (2466 MHz = ch 66) ---
-        if (!pclANT->AssignChannel(USER_ANTCHANNEL_ASSET, /*slave=*/0, /*no ack=*/0, MESSAGE_TIMEOUT)) {
+        // --- Channel 1: Garmin Asset/GPS (2457 MHz = ch 57), slave=0x10 (unidirectional slave) ---
+        if (!pclANT->AssignChannel(USER_CHANNEL_ASSET, /*slave=*/0x10, /*no ack=*/USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
             printf("AssignChannel failed\n");
             return false;
         }
-        if (!pclANT->SetChannelID(USER_ANTCHANNEL_ASSET, 0, 0, 0, MESSAGE_TIMEOUT)) {
+        if (!pclANT->SetChannelID(USER_CHANNEL_ASSET, 0, 0, 0, MESSAGE_TIMEOUT)) {
             printf("SetChannelID failed\n");
             return false;
         }
-        if (!pclANT->SetChannelRFFrequency(USER_ANTCHANNEL_ASSET, 66, MESSAGE_TIMEOUT)) {
+        // Asset Tracker message period
+        if (!pclANT->SetChannelPeriod(USER_CHANNEL_ASSET, 8091, MESSAGE_TIMEOUT)) {
+            printf("SetChannelPeriod failed\n");
+            return false;
+        }
+        if (!pclANT->SetChannelRFFrequency(USER_CHANNEL_ASSET, USER_CHANNEL_RF_FREQ, MESSAGE_TIMEOUT)) {
             printf("SetChannelRFFrequency failed\n");
             return false;
         }
-        if (!pclANT->OpenChannel(USER_ANTCHANNEL_ASSET, MESSAGE_TIMEOUT)) {
+        if (!pclANT->OpenChannel(USER_CHANNEL_ASSET, MESSAGE_TIMEOUT)) {
             printf("OpenChannel failed\n");
             return false;
         }
@@ -156,14 +164,15 @@ namespace ant {
         uint8_t request[8] = {
             PAGE_REQUEST, 0x00, page, 0x00, 0x00, index, 0xFF, 0xFF
         };
-        pclANT->SendBroadcastData(USER_ANTCHANNEL_ASSET, request);
+        pclANT->SendBroadcastData(USER_CHANNEL_ASSET, request);
     }
 
     void requestAssetIdentification(const uint8_t index) {
         uint8_t request[8] = {
             PAGE_REQUEST, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, PAGE_IDENTIFICATION_1, 0x04
         };
-        pclANT->SendAcknowledgedData(USER_ANTCHANNEL_ASSET, request);
+        const bool ok = pclANT->SendAcknowledgedData(USER_CHANNEL_ASSET, request);
+        std::cout << "SendAcknowledgedData returned: " << (ok ? "OK" : "FAIL") << "\n";
         std::cout << "Requested identification (pages 0x10+0x11) from #" << static_cast<int>(index) << "\n";
     }
 
@@ -171,10 +180,10 @@ namespace ant {
         Device d;
         d.index = data[1] & 0x1F;
         d.icon  = (data[1] & 0xE0) >> 5;
-        d.name = std::string(reinterpret_cast<const char*>(&data[2]), 8);
+        d.fullName = std::string(reinterpret_cast<const char*>(&data[2]), 8);
 
         std::cout << "[Asset/3] #" << static_cast<int>(d.index)
-                  << " name='" << d.name << "' icon=" << static_cast<int>(d.icon) << "\n";
+                  << " name='" << d.fullName << "' icon=" << static_cast<int>(d.icon) << "\n";
     }
 
     void handleIdentificationPage1(const uint8_t* data) {
@@ -195,10 +204,10 @@ namespace ant {
         d.index = data[1] & 0x1F;
         firstPageCounters[d.index] = 0;
         std::string part2(reinterpret_cast<const char*>(&data[2]), 8);
-        d.name = partialNames[d.index] + part2;
+        d.fullName = partialNames[d.index] + part2;
 
         std::cout << "[Asset/11] #" << static_cast<int>(d.index)
-                  << " full name='" << d.name << "'\n";
+                  << " full name='" << d.fullName << "'\n";
     }
 
     void handleLocationPage1(const uint8_t* data) {
@@ -392,10 +401,43 @@ namespace ant {
 
     void onGenericMessage(const uint8_t* d, const uint8_t length) {
         printf("Generic ANT+ payload: ");
-        for (int i = 0; i < length; ++i)
+        for (int i = 0; i < length; ++i) {
             printf("%02X ", d[i]);
+        }
         printf("\n");
+
+        if (length >= 11) {
+            const uint16_t devId = d[9] | (d[10] << 8);
+            std::cout << "[Generic] Device ID: " << devId << "\n";
+        }
+
+        // Extract and set ChannelID if possible
+        if (length >= 13) {
+            const uint16_t devId = d[9] | (d[10] << 8);
+            const uint8_t txType = d[11];
+            const uint8_t devType = d[12];
+
+            std::cout << "[Generic] Device ID: " << devId << "\n";
+
+            if (configuredDevIds.insert(devId).second) {
+                std::cout << "[ANT] Setting specific Channel ID → devId=" << devId
+                          << " devType=0x" << std::hex << static_cast<int>(devType)
+                          << " txType=0x" << static_cast<int>(txType) << std::dec << "\n";
+
+                pclANT->SetChannelID(USER_CHANNEL_ASSET, devId, devType, txType, MESSAGE_TIMEOUT);
+            }
+        }
+
+        if (length >= 2 && d[0] == 0x00) {
+            const uint8_t index = d[1] & 0x1F;
+            if (discoveredIndexes.insert(index).second) {
+                std::cout << "[Generic] Page 0 received from #" << static_cast<int>(index)
+                          << " → requesting identification...\n";
+                requestAssetIdentification(index);
+            }
+        }
     }
+
 
     void onGarminProprietary(const uint8_t* d, const uint8_t length) {
         std::cout << "[GarminProprietary] Suspicious packet: ";
@@ -406,6 +448,7 @@ namespace ant {
     }
 
     void dumpHex(const uint8_t* d, const uint8_t length) {
+        return;
         std::cout << "Raw payload (" << static_cast<int>(length) << "): ";
         for (int i = 0; i < length; ++i) {
             printf("%02X ", d[i]);
@@ -420,24 +463,27 @@ namespace ant {
 
         const uint8_t* d = msg.aucData;
 
-        // Detect Asset Tracker (based on known page IDs)
+        // Detect Asset Tracker pages
         if (length >= 10 && (d[0] == 0x01 || d[0] == 0x02 || d[0] == 0x03)) {
             return AntProfile::AssetTracker;
         }
 
-        // Garmin proprietary pattern (often noise)
+        // Detect HRM only if DevType == 0x78
+        if (length >= 14) {
+            const uint8_t devType = d[12];  // from extended data
+            if (d[0] == 0x00 && devType == 0x78)
+                return AntProfile::HeartRate;
+        }
+
+        // Suspicious patterns (noise)
         if (length == 14 && d[0] == 0x00 && d[8] == 0xFF &&
             d[5] == 0xFF && d[6] == 0xFF) {
             return AntProfile::GarminProprietary;
             }
 
-        // Heart rate monitor pattern
-        if (length >= 9 && d[0] == 0x00 && d[8] >= 30 && d[8] <= 220) {
-            return AntProfile::HeartRate;
-        }
-
         return AntProfile::Unknown;
     }
+
 
     void dispatchAntPlusMessage(const ANT_MESSAGE& msg, const uint8_t length) {
         dumpHex(msg.aucData, length);
@@ -460,12 +506,19 @@ namespace ant {
 
     bool searching = true;
 
-    [[noreturn]] void runEventLoop() {
+    void runEventLoop() {
         printf("Starting event loop...\n");
+        auto lastMessageTime = std::chrono::steady_clock::now();
         while (searching) {
+            auto now = std::chrono::steady_clock::now();
             const USHORT length = pclANT->WaitForMessage(MESSAGE_TIMEOUT);
 
             if (length == DSI_FRAMER_TIMEDOUT || length == 0) {
+                const auto secondsSinceLast = std::chrono::duration_cast<std::chrono::seconds>(now - lastMessageTime).count();
+                if (secondsSinceLast > 5) {
+                    std::cout << "[Info] No ANT messages received in the last " << secondsSinceLast << " seconds.\n";
+                    lastMessageTime = now;
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 continue;
             }
@@ -475,11 +528,15 @@ namespace ant {
 
             const UCHAR ucMessageID = msg.ucMessageID;
 
-            if (ucMessageID == 0 ||
-                ucMessageID == DSI_FRAMER_TIMEDOUT ||
-                ucMessageID == MESG_EVENT_ID || // 1: channel event
-                ucMessageID == MESG_RESPONSE_EVENT_ID) // 64: ACK/response
-            {
+            if (ucMessageID == 0) {
+                continue;
+            }
+
+            if (ucMessageID == MESG_EVENT_ID ||
+                ucMessageID == MESG_RESPONSE_EVENT_ID) {
+                if (false)
+                std::cout << "[ANT] Event or response received: msgID=" << static_cast<int>(msg.ucMessageID)
+                          << " | Code=" << static_cast<int>(msg.aucData[2]) << "\n";
                 continue;
             }
 
@@ -488,6 +545,7 @@ namespace ant {
             if (ucMessageID == MESG_BROADCAST_DATA_ID ||
                 ucMessageID == MESG_EXT_BROADCAST_DATA_ID) {
 
+                lastMessageTime = now;
                 dispatchAntPlusMessage(msg, length);
 
             }
@@ -498,10 +556,10 @@ namespace ant {
         searching = false;
         if (pclANT) {
             std::cout << "Closing ANT channel...\n";
-            pclANT->CloseChannel(USER_ANTCHANNEL_HRM);
-            pclANT->UnAssignChannel(USER_ANTCHANNEL_HRM);
-            pclANT->CloseChannel(USER_ANTCHANNEL_ASSET);
-            pclANT->UnAssignChannel(USER_ANTCHANNEL_ASSET);
+            pclANT->CloseChannel(USER_CHANNEL_HRM);
+            pclANT->UnAssignChannel(USER_CHANNEL_HRM);
+            pclANT->CloseChannel(USER_CHANNEL_ASSET);
+            pclANT->UnAssignChannel(USER_CHANNEL_ASSET);
             pclANT->ResetSystem();
             delete pclANT;
             pclANT = nullptr;
