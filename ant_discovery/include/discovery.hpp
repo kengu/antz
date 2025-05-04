@@ -4,7 +4,6 @@
 #include "types.h"
 
 namespace ant {
-    bool initialize();
     bool initialize(UCHAR ucDeviceNumber);
     bool startDiscovery();
     void runEventLoop();
