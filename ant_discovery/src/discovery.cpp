@@ -1,15 +1,11 @@
 #include "types.h"
 #include "dsi_framer_ant.hpp"
-#include "dsi_thread.h"
 #include "dsi_serial_generic.hpp"
 #include "ant.h"
 
 #include <iostream>
-#include <cstdio>
 #include <thread>
 #include <chrono>
-#include <cmath>
-#include <cstdint>
 #include <iomanip>
 #include <set>
 #include <string>
@@ -34,30 +30,29 @@ constexpr uint8_t PAGE_IDENTIFICATION_1 = 0x10;
 constexpr uint8_t PAGE_IDENTIFICATION_2 = 0x11;
 constexpr uint8_t PAGE_REQUEST = 0x46;
 
-
-struct Device {
-    uint8_t index;
-    std::string fullName;
-    uint8_t icon = 0;
-    uint16_t distance = 0;
-    float headingDegrees = 0.0f;
-    double latitude = 0.0;
-    double longitude = 0.0;
-    bool gpsLost = false;
-    bool commsLost = false;
-    bool remove = false;
-    bool lowBattery = false;
-    std::string batteryLevel = "Unknown";
-};
-
 namespace ant {
-    static DSISerialGeneric *pclSerial = nullptr;
-    static DSIFramerANT *pclANT = nullptr;
-    static std::set<uint8_t> knownIndexes;
-    static std::set<uint8_t> discoveredIndexes;
-    static std::set<uint16_t> configuredDevIds;
-    static std::map<uint8_t, std::string> partialNames;
-    static std::map<uint8_t, int> firstPageCounters;
+
+    enum class LogLevel {
+        Fine,
+        Info,
+        Warn,
+        Error
+    };
+
+    struct Device {
+        uint8_t index;
+        std::string fullName;
+        uint8_t icon = 0;
+        uint16_t distance = 0;
+        float headingDegrees = 0.0f;
+        double latitude = 0.0;
+        double longitude = 0.0;
+        bool gpsLost = false;
+        bool commsLost = false;
+        bool remove = false;
+        bool lowBattery = false;
+        std::string batteryLevel = "Unknown";
+    };
 
     enum class AntProfile {
         Unknown,
@@ -66,22 +61,79 @@ namespace ant {
         GarminProprietary
     };
 
+    static DSIFramerANT *pclANT = nullptr;
+    static DSISerialGeneric *pclSerial = nullptr;
+    static std::set<uint8_t> knownIndexes;
+    static std::set<uint8_t> discoveredIndexes;
+    static std::set<uint16_t> configuredDevIds;
+    static std::map<uint8_t, std::string> partialNames;
+    static std::map<uint8_t, int> firstPageCounters;
+    static auto logLevel = LogLevel::Info;
+
+    void log(const LogLevel level, const std::string& message) {
+        if (level < logLevel) return;
+
+        auto name = "";
+        switch (level) {
+            case LogLevel::Fine:  name = "[FINE]"; break;
+            case LogLevel::Info:  name = "[INFO]"; break;
+            case LogLevel::Warn:  name = "[WARN]"; break;
+            case LogLevel::Error: name = "[ERROR]"; break;
+        }
+
+        const auto now = std::chrono::system_clock::now();
+        const std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        const std::tm* tm_ptr = std::localtime(&now_c);
+        char timeBuf[20];
+        std::strftime(timeBuf, sizeof(timeBuf), "%F %T", tm_ptr);
+
+        std::cout << timeBuf << ": " << name << ": " << message << std::endl;
+    }
+
+    void fine(const std::string& message) {
+        log(LogLevel::Fine, message);
+    }
+
+    void info(const std::string& message) {
+        log(LogLevel::Info, message);
+    }
+
+    void warn(const std::string& message) {
+        log(LogLevel::Warn, message);
+    }
+
+    void error(const std::string& message) {
+        log(LogLevel::Error, message);
+    }
+
+    std::string toHex(const uint8_t* d, int length) {
+        std::ostringstream oss;
+        for (int i = 0; i < length; ++i) {
+            oss << std::uppercase << std::hex
+                << std::setw(2) << std::setfill('0')
+                << static_cast<int>(d[i]) << " ";
+        }
+        return oss.str();
+    }
+
     bool initialize(const UCHAR ucDeviceNumber) {
-        printf("ANT initialization started...\n");
+        info("ANT initialization started...");
 
         pclSerial = new DSISerialGeneric();
         if (!pclSerial->Init(50000, ucDeviceNumber)) {
-            printf("Failed to open USB port %u\n", ucDeviceNumber);
+            std::ostringstream oss;
+            oss << "Failed to open USB port " << static_cast<int>(ucDeviceNumber);
+            info(oss.str());
             return false;
         }
         pclANT = new DSIFramerANT(pclSerial);
         pclSerial->SetCallback(pclANT);
         if (!pclANT->Init()) {
-            printf("Framer Init failed\n");
+            info("Framer Init failed");
             return false;
         }
         if (!pclSerial->Open()) {
-            printf("Serial Open failed\n");
+            info("Serial Open failed");
             return false;
         }
 
@@ -93,7 +145,9 @@ namespace ant {
             if (length > 0 && length != DSI_FRAMER_TIMEDOUT) {
                 ANT_MESSAGE msg;
                 pclANT->GetMessage(&msg);
-                printf("Message ID was %u\n", msg.ucMessageID);
+                std::ostringstream oss;
+                oss << "Message ID was " << static_cast<int>(msg.ucMessageID);
+                info(oss.str());
                 if (msg.ucMessageID == MESG_STARTUP_MESG_ID) break;
             }
         }
@@ -101,62 +155,62 @@ namespace ant {
     }
 
     bool startDiscovery() {
-        printf("Start ANT discovery...\n");
+        info("Start ANT discovery...");
 
         if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
-            printf("SetNetworkKey failed\n");
+            error("SetNetworkKey failed");
             return false;
         }
 
         // --- Channel 0: HRM (2457 MHz = ch 57) ---
         if (!pclANT->AssignChannel(USER_CHANNEL_HRM, /*slave=*/0, /*no ack=*/USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
-            printf("AssignChannel failed\n");
+            error("AssignChannel failed");
             return false;
         }
         if (!pclANT->SetChannelID(USER_CHANNEL_HRM, 0, 0, 0, MESSAGE_TIMEOUT)) {
-            printf("SetChannelID failed\n");
+            error("SetChannelID failed");
             return false;
         }
 
         // Heart Rate message period
         if (!pclANT->SetChannelPeriod(USER_CHANNEL_HRM, 8070, MESSAGE_TIMEOUT)) {
-            printf("SetChannelPeriod failed\n");
+            error("SetChannelPeriod failed");
             return false;
         }
         if (!pclANT->SetChannelRFFrequency(USER_CHANNEL_HRM, USER_CHANNEL_RF_FREQ, MESSAGE_TIMEOUT)) {
-            printf("SetChannelRFFrequency failed\n");
+            error("SetChannelRFFrequency failed");
             return false;
         }
         if (!pclANT->OpenChannel(USER_CHANNEL_HRM, MESSAGE_TIMEOUT)) {
-            printf("OpenChannel failed\n");
+            error("OpenChannel failed");
             return false;
         }
 
         // --- Channel 1: Garmin Asset/GPS (2457 MHz = ch 57), slave=0x10 (unidirectional slave) ---
         if (!pclANT->AssignChannel(USER_CHANNEL_ASSET, /*slave=*/0x10, /*no ack=*/USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
-            printf("AssignChannel failed\n");
+            error("AssignChannel failed");
             return false;
         }
         if (!pclANT->SetChannelID(USER_CHANNEL_ASSET, 0, 0, 0, MESSAGE_TIMEOUT)) {
-            printf("SetChannelID failed\n");
+            error("SetChannelID failed");
             return false;
         }
         // Asset Tracker message period
         if (!pclANT->SetChannelPeriod(USER_CHANNEL_ASSET, 8091, MESSAGE_TIMEOUT)) {
-            printf("SetChannelPeriod failed\n");
+            error("SetChannelPeriod failed");
             return false;
         }
         if (!pclANT->SetChannelRFFrequency(USER_CHANNEL_ASSET, USER_CHANNEL_RF_FREQ, MESSAGE_TIMEOUT)) {
-            printf("SetChannelRFFrequency failed\n");
+            error("SetChannelRFFrequency failed");
             return false;
         }
         if (!pclANT->OpenChannel(USER_CHANNEL_ASSET, MESSAGE_TIMEOUT)) {
-            printf("OpenChannel failed\n");
+            error("OpenChannel failed");
             return false;
         }
 
         pclANT->RxExtMesgsEnable(TRUE);
-        printf("Discovery started successfully!\n");
+        info("Discovery started successfully!");
         return true;
     }
 
@@ -171,9 +225,17 @@ namespace ant {
         uint8_t request[8] = {
             PAGE_REQUEST, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, PAGE_IDENTIFICATION_1, 0x04
         };
-        const bool ok = pclANT->SendAcknowledgedData(USER_CHANNEL_ASSET, request);
-        std::cout << "SendAcknowledgedData returned: " << (ok ? "OK" : "FAIL") << "\n";
-        std::cout << "Requested identification (pages 0x10+0x11) from #" << static_cast<int>(index) << "\n";
+        {
+            const bool ok = pclANT->SendAcknowledgedData(USER_CHANNEL_ASSET, request);
+            std::ostringstream oss;
+            oss << "SendAcknowledgedData returned: " << (ok ? "OK" : "FAIL");
+            fine(oss.str());
+        }
+        {
+            std::ostringstream oss;
+            oss << "Requested identification (pages 0x10+0x11) from #" << static_cast<int>(index);
+            info(oss.str());
+        }
     }
 
     void handleAssetIdentification(const uint8_t* data) {
@@ -182,15 +244,21 @@ namespace ant {
         d.icon  = (data[1] & 0xE0) >> 5;
         d.fullName = std::string(reinterpret_cast<const char*>(&data[2]), 8);
 
-        std::cout << "[Asset/3] #" << static_cast<int>(d.index)
-                  << " name='" << d.fullName << "' icon=" << static_cast<int>(d.icon) << "\n";
+        {
+            std::ostringstream oss;
+            oss << "[Asset/3] #" << static_cast<int>(d.index)
+                    << " name='" << d.fullName << "' icon=" << static_cast<int>(d.icon);
+            info(oss.str());
+        }
     }
 
     void handleIdentificationPage1(const uint8_t* data) {
         const uint8_t index = data[1] & 0x1F;
         firstPageCounters[index]++;
         if (firstPageCounters[index] > 3) {
-            std::cout << "[Asset] #" << static_cast<int>(index) << " seems disconnected → removing\n";
+            std::ostringstream oss;
+            oss << "[Asset] #" << static_cast<int>(index) << " seems disconnected → removing";
+            info(oss.str());
             knownIndexes.erase(index);
             partialNames.erase(index);
             firstPageCounters.erase(index);
@@ -206,8 +274,12 @@ namespace ant {
         std::string part2(reinterpret_cast<const char*>(&data[2]), 8);
         d.fullName = partialNames[d.index] + part2;
 
-        std::cout << "[Asset/11] #" << static_cast<int>(d.index)
-                  << " full name='" << d.fullName << "'\n";
+        {
+            std::ostringstream oss;
+            oss << "[Asset/11] #" << static_cast<int>(d.index)
+                << " full name='" << d.fullName;
+            info(oss.str());
+        }
     }
 
     void handleLocationPage1(const uint8_t* data) {
@@ -215,7 +287,9 @@ namespace ant {
         d.index = data[1] & 0x1F;
         firstPageCounters[d.index]++;
         if (firstPageCounters[d.index] > 3) {
-            std::cout << "[Asset] #" << static_cast<int>(d.index) << " seems disconnected → removing\n";
+            std::ostringstream oss;
+            oss << "[Asset] #" << static_cast<int>(d.index) << " seems disconnected → removing";
+            info(oss.str());
             knownIndexes.erase(d.index);
             partialNames.erase(d.index);
             firstPageCounters.erase(d.index);
@@ -227,7 +301,7 @@ namespace ant {
         }
 
         d.distance = data[2] | (data[3] << 8);
-        float bearingBradians = data[4] / 256.0f * 2.0f * static_cast<float>(M_PI);
+        const float bearingBradians = data[4] / 256.0f * 2.0f * static_cast<float>(M_PI);
         d.headingDegrees = bearingBradians * (180.0f / static_cast<float>(M_PI));
 
         const uint8_t status = data[5];
@@ -236,15 +310,22 @@ namespace ant {
         d.remove     = status & 0x04;
         d.lowBattery = status & 0x08;
 
-        std::cout << "[Asset/1] #" << static_cast<int>(d.index)
-                  << " → " << d.distance << "m @ "
-                  << std::fixed << std::setprecision(1) << d.headingDegrees << "°";
+        {
+            std::ostringstream oss;
+            oss << "[Asset/1] #" << static_cast<int>(d.index);
+            if (d.distance == 0xFFFF) {
+                oss << " → ?";
+            } else {
+                oss << " → " << d.distance;
+            }
+            oss << "m @ " << std::fixed << std::setprecision(1) << d.headingDegrees << "°";
 
-        if (d.gpsLost)     std::cout << " | GPS Lost";
-        if (d.commsLost)   std::cout << " | Comms Lost";
-        if (d.remove)      std::cout << " | Remove";
-        if (d.lowBattery)  std::cout << " | Battery Low";
-        std::cout << "\n";
+            if (d.gpsLost)     oss << " | GPS Lost";
+            if (d.commsLost)   oss << " | Comms Lost";
+            if (d.remove)      oss << " | Remove";
+            if (d.lowBattery)  oss << " | Battery Low";
+            info(oss.str());
+        }
     }
 
     void handleLocationPage2(const uint8_t* data) {
@@ -259,9 +340,13 @@ namespace ant {
         d.latitude  = lat * (180.0 / 0x80000000);
         d.longitude = lon * (180.0 / 0x80000000);
 
-        std::cout << "[Asset/2] #" << static_cast<int>(d.index)
-                  << " @ " << std::fixed << std::setprecision(6)
-                  << d.latitude << ", " << d.longitude << "\n";
+        {
+            std::ostringstream oss;
+            oss << "[Asset/2] #" << static_cast<int>(d.index)
+                << " @ " << std::fixed << std::setprecision(6)
+                << d.latitude << ", " << d.longitude;
+            info(oss.str());
+        }
     }
 
     void handleBatteryStatus(const uint8_t* data) {
@@ -278,13 +363,18 @@ namespace ant {
             default: d.batteryLevel = "Unknown";
         }
 
-        std::cout << "[Asset/6] #" << static_cast<int>(d.index)
-                  << " Battery: " << d.batteryLevel << "\n";
+        {
+            std::ostringstream oss;
+            oss << "[Asset/6] #" << static_cast<int>(d.index)
+                << " Battery: " << d.batteryLevel;
+            info(oss.str());
+        }
     }
 
     void handleUnknownPage(const uint8_t* data) {
         const uint8_t page = data[0];
-        std::cout << "[Asset/?] Unknown page: 0x" << std::hex << static_cast<int>(page) << "\n";
+        std::ostringstream oss;
+        oss << "[Asset/?] Unknown page: 0x" << std::hex << static_cast<int>(page);
     }
 
     void onAssetTrackerMessage(const uint8_t* data, const uint8_t length) {
@@ -307,30 +397,35 @@ namespace ant {
         const uint8_t hr = static_cast<int>(d[8]);
 
         if (hr < 30 || hr > 220) {
-            std::cout << "[Ignored] Implausible HR: " << static_cast<int>(hr) << " bpm" << std::endl;
+            std::ostringstream oss;
+            oss << "[Ignored] Implausible HR: " << static_cast<int>(hr) << " bpm";
+            info(oss.str());
             return;
         }
 
-        std::cout << "Heart Rate: " << static_cast<int>(hr) << " bpm";
+        {
+            std::ostringstream oss;
+            oss << "Heart Rate: " << static_cast<int>(hr) << " bpm";
 
-        if (length >= 14) {
-            const uint16_t devId = d[9] | (d[10] << 8);
-            const int8_t rssi = static_cast<int8_t>(d[11]);
-            const uint8_t flags = d[12];
+            if (length >= 14) {
+                const uint16_t devId = d[9] | (d[10] << 8);
+                const int8_t rssi = static_cast<int8_t>(d[11]);
+                const uint8_t flags = d[12];
 
-            std::cout << " | Device ID: " << devId
-                      << " | RSSI: " << static_cast<int>(rssi) << " dBm";
+                oss << " | Device ID: " << devId
+                          << " | RSSI: " << static_cast<int>(rssi) << " dBm";
 
-            if (flags & (1 << 4)) std::cout << " | Proximity info present";
-            if (flags & (1 << 3)) std::cout << " | RSSI included";
-            if (flags & (1 << 2)) std::cout << " | Channel type info";
-            if (flags & (1 << 1)) std::cout << " | Transmission type info";
-            if (flags & (1 << 0)) std::cout << " | Device type info";
+                if (flags & (1 << 4)) oss << " | Proximity info present";
+                if (flags & (1 << 3)) oss << " | RSSI included";
+                if (flags & (1 << 2)) oss << " | Channel type info";
+                if (flags & (1 << 1)) oss << " | Transmission type info";
+                if (flags & (1 << 0)) oss << " | Device type info";
 
-            std::cout << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
+                oss << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
+            }
+            info(oss.str());
         }
 
-        std::cout << std::endl;
     }
 
     void onHeartRateMessage1(const uint8_t* d, const uint8_t length) {
@@ -338,77 +433,80 @@ namespace ant {
         const uint8_t hr = static_cast<int>(d[8]);
 
         if (hr < 30 || hr > 220) {
-            std::cout << "[Ignored] Implausible HR: " << static_cast<int>(hr) << " bpm" << std::endl;
+            std::ostringstream oss;
+            oss << "[Ignored] Implausible HR: " << static_cast<int>(hr) << " bpm";
+            info(oss.str());
             return;
         }
 
-        std::cout << "Heart Rate: " << int(hr) << " bpm";
+        {
+            std::ostringstream oss;
+            oss << "Heart Rate: " << static_cast<int>(hr) << " bpm";
 
-        if (length >= 14) {
-            const uint16_t devId = d[9] | (d[10] << 8);
-
-            uint8_t txType = 0;
-            uint8_t devType = 0;
-            int8_t rssi = 0;
-            uint8_t flags = 0;
-
-            // safe fallback for minimal ext
             if (length >= 14) {
-                constexpr int extOffset = 11;
-                rssi = static_cast<int8_t>(d[extOffset]);
-                flags = d[extOffset + 1];
+                const uint16_t devId = d[9] | (d[10] << 8);
+
+                uint8_t txType = 0;
+                uint8_t devType = 0;
+                int8_t rssi = 0;
+                uint8_t flags = 0;
+
+                // safe fallback for minimal ext
+                if (length >= 14) {
+                    constexpr int extOffset = 11;
+                    rssi = static_cast<int8_t>(d[extOffset]);
+                    flags = d[extOffset + 1];
+                }
+
+                // Decode optional tx/dev type if present
+                if (length >= 16) {
+                    txType  = d[11];
+                    devType = d[12];
+                    rssi    = static_cast<int8_t>(d[13]);
+                    flags   = d[14];
+                }
+
+                oss << " | Device ID: " << devId;
+
+                if (txType || devType) {
+                    oss << " | TxType: 0x" << std::hex << static_cast<int>(txType)
+                              << " | DevType: 0x" << static_cast<int>(devType) << std::dec;
+
+                    // Optionally map known dev types:
+                    if (devType == 0x78)
+                        oss << " (HRM)";
+                    else if (devType == 0x7C)
+                        oss << " (Speed+Cadence)";
+                    else if (devType == 0x0F)
+                        oss << " (Garmin GPS)";
+                    else
+                        oss << " (Unknown Dev)";
+                }
+
+                oss << " | RSSI: " << static_cast<int>(rssi) << " dBm";
+
+                if (flags & (1 << 4)) oss << " | Proximity info";
+                if (flags & (1 << 3)) oss << " | RSSI flag";
+                if (flags & (1 << 2)) oss << " | Channel type";
+                if (flags & (1 << 1)) oss << " | TxType flag";
+                if (flags & (1 << 0)) oss << " | DevType flag";
+
+                oss << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
             }
 
-            // Decode optional tx/dev type if present
-            if (length >= 16) {
-                txType  = d[11];
-                devType = d[12];
-                rssi    = static_cast<int8_t>(d[13]);
-                flags   = d[14];
-            }
-
-            std::cout << " | Device ID: " << devId;
-
-            if (txType || devType) {
-                std::cout << " | TxType: 0x" << std::hex << static_cast<int>(txType)
-                          << " | DevType: 0x" << static_cast<int>(devType) << std::dec;
-
-                // Optionally map known dev types:
-                if (devType == 0x78)
-                    std::cout << " (HRM)";
-                else if (devType == 0x7C)
-                    std::cout << " (Speed+Cadence)";
-                else if (devType == 0x0F)
-                    std::cout << " (Garmin GPS)";
-                else
-                    std::cout << " (Unknown Dev)";
-            }
-
-            std::cout << " | RSSI: " << static_cast<int>(rssi) << " dBm";
-
-            if (flags & (1 << 4)) std::cout << " | Proximity info";
-            if (flags & (1 << 3)) std::cout << " | RSSI flag";
-            if (flags & (1 << 2)) std::cout << " | Channel type";
-            if (flags & (1 << 1)) std::cout << " | TxType flag";
-            if (flags & (1 << 0)) std::cout << " | DevType flag";
-
-            std::cout << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
+            info(oss.str());
         }
 
-        std::cout << std::endl;
     }
 
 
     void onGenericMessage(const uint8_t* d, const uint8_t length) {
-        printf("Generic ANT+ payload: ");
-        for (int i = 0; i < length; ++i) {
-            printf("%02X ", d[i]);
-        }
-        printf("\n");
-
+        info("Generic ANT+ payload: " + toHex(d, length));
         if (length >= 11) {
+            std::ostringstream oss;
             const uint16_t devId = d[9] | (d[10] << 8);
-            std::cout << "[Generic] Device ID: " << devId << "\n";
+            oss << "[Generic] Device ID: " << devId;
+            info(oss.str());
         }
 
         // Extract and set ChannelID if possible
@@ -417,22 +515,34 @@ namespace ant {
             const uint8_t txType = d[11];
             const uint8_t devType = d[12];
 
-            std::cout << "[Generic] Device ID: " << devId << "\n";
+            {
+                std::ostringstream oss;
+
+                oss << "[Generic] Device ID: " << devId;
+                info(oss.str());
+            }
 
             if (configuredDevIds.insert(devId).second) {
-                std::cout << "[ANT] Setting specific Channel ID → devId=" << devId
+                std::ostringstream oss;
+                oss.clear();
+                oss << "[ANT] Setting specific Channel ID → devId=" << devId
                           << " devType=0x" << std::hex << static_cast<int>(devType)
-                          << " txType=0x" << static_cast<int>(txType) << std::dec << "\n";
+                          << " txType=0x" << static_cast<int>(txType) << std::dec;
 
                 pclANT->SetChannelID(USER_CHANNEL_ASSET, devId, devType, txType, MESSAGE_TIMEOUT);
+
+                info(oss.str());
             }
+
         }
 
         if (length >= 2 && d[0] == 0x00) {
             const uint8_t index = d[1] & 0x1F;
             if (discoveredIndexes.insert(index).second) {
-                std::cout << "[Generic] Page 0 received from #" << static_cast<int>(index)
-                          << " → requesting identification...\n";
+                std::ostringstream oss;
+                oss << "[Generic] Page 0 received from #" << static_cast<int>(index)
+                    << " → requesting identification...";
+                info(oss.str());
                 requestAssetIdentification(index);
             }
         }
@@ -440,20 +550,11 @@ namespace ant {
 
 
     void onGarminProprietary(const uint8_t* d, const uint8_t length) {
-        std::cout << "[GarminProprietary] Suspicious packet: ";
-        for (int i = 0; i < length; ++i) {
-            printf("%02X ", d[i]);
-        }
-        std::cout << std::endl;
+        info("[GarminProprietary] Suspicious packet: " + toHex(d, length));
     }
 
-    void dumpHex(const uint8_t* d, const uint8_t length) {
-        return;
-        std::cout << "Raw payload (" << static_cast<int>(length) << "): ";
-        for (int i = 0; i < length; ++i) {
-            printf("%02X ", d[i]);
-        }
-        std::cout << std::endl;
+    void dumpRaw(const uint8_t* d, const uint8_t length) {
+        info("Raw payload (" + std::to_string(length) + "): " + toHex(d, length));
     }
 
     AntProfile detectProfile(const ANT_MESSAGE& msg, const uint8_t length) {
@@ -486,7 +587,7 @@ namespace ant {
 
 
     void dispatchAntPlusMessage(const ANT_MESSAGE& msg, const uint8_t length) {
-        dumpHex(msg.aucData, length);
+        dumpRaw(msg.aucData, length);
         const AntProfile profile = detectProfile(msg, length);
         switch (profile) {
             case AntProfile::HeartRate:
@@ -507,7 +608,7 @@ namespace ant {
     bool searching = true;
 
     void runEventLoop() {
-        printf("Starting event loop...\n");
+        info("Starting event loop...");
         auto lastMessageTime = std::chrono::steady_clock::now();
         while (searching) {
             auto now = std::chrono::steady_clock::now();
@@ -516,7 +617,11 @@ namespace ant {
             if (length == DSI_FRAMER_TIMEDOUT || length == 0) {
                 const auto secondsSinceLast = std::chrono::duration_cast<std::chrono::seconds>(now - lastMessageTime).count();
                 if (secondsSinceLast > 5) {
-                    std::cout << "[Info] No ANT messages received in the last " << secondsSinceLast << " seconds.\n";
+                    std::ostringstream oss;
+                    oss << "No ANT messages received in the last "
+                        << secondsSinceLast
+                        << " seconds";
+                    info(oss.str());
                     lastMessageTime = now;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -534,13 +639,22 @@ namespace ant {
 
             if (ucMessageID == MESG_EVENT_ID ||
                 ucMessageID == MESG_RESPONSE_EVENT_ID) {
-                if (false)
-                std::cout << "[ANT] Event or response received: msgID=" << static_cast<int>(msg.ucMessageID)
-                          << " | Code=" << static_cast<int>(msg.aucData[2]) << "\n";
+                if (false) {
+                    std::ostringstream oss;
+                    oss << "[ANT] Event or response received: msgID=" << static_cast<int>(msg.ucMessageID)
+                            << " | Code=" << static_cast<int>(msg.aucData[2]);
+                    fine(oss.str());
+                }
                 continue;
             }
 
-            printf("Got msgID=%u, len=%u\n", ucMessageID, length);
+            {
+                std::ostringstream oss;
+                oss << "Got msgID="
+                    << static_cast<int>(ucMessageID)
+                    << "len=" << static_cast<int>(length);
+                fine(oss.str());
+            }
 
             if (ucMessageID == MESG_BROADCAST_DATA_ID ||
                 ucMessageID == MESG_EXT_BROADCAST_DATA_ID) {
@@ -555,7 +669,9 @@ namespace ant {
     void cleanup() {
         searching = false;
         if (pclANT) {
-            std::cout << "Closing ANT channel...\n";
+            std::ostringstream oss;
+            oss << "Closing ANT channel...";
+            info(oss.str());
             pclANT->CloseChannel(USER_CHANNEL_HRM);
             pclANT->UnAssignChannel(USER_CHANNEL_HRM);
             pclANT->CloseChannel(USER_CHANNEL_ASSET);
