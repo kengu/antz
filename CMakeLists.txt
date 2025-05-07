@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(antz)
-
+set(CMAKE_BUILD_TYPE Debug)
+add_definitions(-DDEBUG_FILE)
 add_subdirectory(ANT-SDK_Mac.3.5)
 add_subdirectory(ant_discovery)

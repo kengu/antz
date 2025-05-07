@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(ANT_MacOSX_Library C CXX)
 
+add_definitions(-DDEBUG_FILE)
+
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -44,6 +46,7 @@ set(ANTBASE_C_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/system/dsi_convert.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/system/dsi_thread_posix.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB/software/system/macros.c
+        ../ant_discovery/src/profile_discovery.h
 )
 
 # macOS frameworks
@@ -54,7 +57,18 @@ find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
 find_library(SYSTEM_C_LIBRARY c)
 
 # Static library: libantbase.a
-add_library(antbase STATIC ${ANTBASE_C_SRC} ${ANTBASE_CPP_SRC})
+add_library(antbase STATIC ${ANTBASE_C_SRC} ${ANTBASE_CPP_SRC}
+        ../ant_discovery/src/profile_discovery.h
+        ../ant_discovery/src/hrm_discovery.h
+        ../ant_discovery/src/hrm_discovery.cpp
+        ../ant_discovery/src/discovery_machine.h
+        ../ant_discovery/src/discovery_machine.cpp
+        ../ant_discovery/src/asset_tracker_discovery.cpp
+        ../ant_discovery/src/asset_tracker_discovery.h
+        ../ant_discovery/src/ant_constants.h
+        ../ant_discovery/src/logging.h
+        ../ant_discovery/src/ant_device.h
+        ../ant_discovery/src/ant_profiles.h)
 target_link_libraries(antbase PUBLIC ${IOKIT_FRAMEWORK} ${COREFOUNDATION_FRAMEWORK} ${SYSTEM_C_LIBRARY})
 target_include_directories(antbase PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/ANT_LIB
@@ -64,7 +78,8 @@ target_include_directories(antbase PUBLIC
 
 
 # Shared library: libantbase_shared.dylib
-add_library(antbase_shared SHARED ${ANTBASE_CPP_SRC} ${ANTBASE_C_SRC})
+add_library(antbase_shared SHARED ${ANTBASE_CPP_SRC} ${ANTBASE_C_SRC}
+        ../ant_discovery/src/profile_discovery.h)
 target_link_libraries(antbase_shared
     PUBLIC
         antbase
@@ -100,7 +115,8 @@ add_custom_command(TARGET demo_dylib POST_BUILD
 )
 
 # Shared library libant -> libant.dylib
-add_library(libant SHARED DEMO_DLL/libant.cpp)
+add_library(libant SHARED DEMO_DLL/libant.cpp
+        ../ant_discovery/src/profile_discovery.h)
 set_target_properties(libant PROPERTIES
     OUTPUT_NAME ant
     INSTALL_NAME_DIR "@executable_path"

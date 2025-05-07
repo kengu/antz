@@ -1,8 +1,17 @@
 project(ant_discovery)
 
+set(CMAKE_BUILD_TYPE Debug)
+add_definitions(-DDEBUG_FILE)
+
 add_executable(ant_discovery
         src/main.cpp
         src/discovery.cpp
+        src/logging.h
+        src/ant_device.h
+        src/ant_profiles.h
+        src/hrm_discovery.cpp
+        src/asset_tracker_discovery.cpp
+        src/ant_constants.h
 )
 
 # Kun lokale includes og SDK-headers fra installert Bin
