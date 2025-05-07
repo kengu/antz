@@ -363,16 +363,6 @@ namespace ant {
         return info;
     }
 
-    uint8_t trailerLengthGuess(uint8_t flags) {
-        uint8_t len = 0;
-        if (flags & (1 << 4)) len++; // Proximity
-        if (flags & (1 << 3)) len++; // RSSI
-        if (flags & (1 << 2)) len++; // Channel Type
-        if (flags & (1 << 1)) len++; // TxType
-        if (flags & (1 << 0)) len++; // DevType
-        return len;
-    }
-
     std::string describeAssetType(const uint8_t type) {
         switch (type) {
         case 0x00: return "Tracker";
@@ -553,6 +543,70 @@ namespace ant {
                 if (msg.ucMessageID == MESG_STARTUP_MESG_ID) break;
             }
         }
+        return true;
+    }
+
+        bool openChannel(const Channel& ch) {
+        const std::string suffix = " failed for channel #" + std::to_string(ch.cNum);
+        if (!pclANT->AssignChannel(ch.cNum, ch.cType, USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
+            error("AssignChannel" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelID(ch.cNum, ch.dNum, ch.dType, ch.tType, MESSAGE_TIMEOUT)) {
+            error("SetChannelID" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelPeriod(ch.cNum, ch.period,MESSAGE_TIMEOUT)) {
+            error("SetChannelPeriod" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelRFFrequency(ch.cNum, ch.rfFreq,MESSAGE_TIMEOUT)) {
+            error("SetChannelRFFrequency" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
+            error("SetNetworkKey failed" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelSearchTimeout(ch.cNum, ch.searchTimeout, MESSAGE_TIMEOUT)) {
+            error("SetChannelSearchTimeout" + suffix);
+            return false;
+        }
+
+        if (!pclANT->OpenChannel(ch.cNum,MESSAGE_TIMEOUT)) {
+            error("OpenChannel" + suffix);
+            return false;
+        }
+
+        std::ostringstream oss;
+        oss <<"Opened ANT Channel #" << std::to_string(ch.cNum)
+            << " | Channel Type: 0x" + toHexByte(ch.cType)
+            << " | Device #: 0x" + toHexByte(ch.dNum)
+            << " | Device Type: 0x" + toHexByte(ch.dType)
+            << " | Tx Type: 0x" + toHexByte(ch.tType);
+        info(oss.str());
+        return true;
+    }
+
+    bool closeChannel(const uint8_t number) {
+        if (!pclANT) {
+            error("Failed to close channel #"
+                + std::to_string(number)
+                + "[closeChannel] ANT framer is not initialized");
+            return false;
+        }
+
+        if (!pclANT->CloseChannel(number)) {
+            error("Failed to close channel #" + std::to_string(number));
+            return false;
+        }
+
+        info("Channel #" + std::to_string(number) + " [CLOSED]");
         return true;
     }
 
@@ -993,6 +1047,25 @@ namespace ant {
         info(oss.str());
     }
 
+    void handleDisconnectPage(const uint8_t* data) {
+        Device device;
+        parseDevice(data, device);
+
+        std::ostringstream oss;
+        const uint8_t channel = data[0];
+        oss << "[CH] #" << std::to_string(channel) << ": "
+            << "[ASSET/32] Device will turn off soon";
+
+        if (isDataChannelIdExt(data)){
+            oss << " | "<< formatDeviceInfo(device.number, device.dType, device.tType);
+        }
+        info(oss.str());
+
+        closeChannel(channel);
+
+    }
+
+
     void handleUnknownPage(const uint8_t* data, const UCHAR length) {
         const uint8_t* payload = &data[1];
         const uint8_t page = payload[0];
@@ -1060,13 +1133,12 @@ namespace ant {
             case PAGE_NO_ASSETS:          handleNoAssetsPage(data, length); break;
             case PAGE_LOCATION_1:         handleLocationPage1(data); break;
             case PAGE_LOCATION_2:         handleLocationPage2(data); break;
-//            case PAGE_IDENTIFICATION_1:   handleUnknownPage(data,length); break;
-//            case PAGE_IDENTIFICATION_2:   handleUnknownPage(data, length); break;
             case PAGE_IDENTIFICATION_1:   handleIdentificationPage1(data); break;
             case PAGE_IDENTIFICATION_2:   handleIdentificationPage2(data); break;
             case PAGE_PRODUCT_INFO:       handleProductInfoPage(data); break;
             case PAGE_BATTERY_STATUS:     handleBatteryStatusPage(data); break;
             case PAGE_MANUFACTURER_IDENT: handleManufacturerInfoPage(data); break;
+            case PAGE_DISCONNECT:         handleDisconnectPage(data); break;
             default:                      handleUnknownPage(data, length); break;
         }
     }
@@ -1149,70 +1221,6 @@ namespace ant {
                 onGenericMessage(msg, length);
                 break;
         }
-    }
-
-    bool openChannel(const Channel& ch) {
-        const std::string suffix = " failed for channel #" + std::to_string(ch.cNum);
-        if (!pclANT->AssignChannel(ch.cNum, ch.cType, USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
-            error("AssignChannel" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelID(ch.cNum, ch.dNum, ch.dType, ch.tType, MESSAGE_TIMEOUT)) {
-            error("SetChannelID" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelPeriod(ch.cNum, ch.period,MESSAGE_TIMEOUT)) {
-            error("SetChannelPeriod" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelRFFrequency(ch.cNum, ch.rfFreq,MESSAGE_TIMEOUT)) {
-            error("SetChannelRFFrequency" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
-            error("SetNetworkKey failed" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelSearchTimeout(ch.cNum, ch.searchTimeout, MESSAGE_TIMEOUT)) {
-            error("SetChannelSearchTimeout" + suffix);
-            return false;
-        }
-
-        if (!pclANT->OpenChannel(ch.cNum,MESSAGE_TIMEOUT)) {
-            error("OpenChannel" + suffix);
-            return false;
-        }
-
-        std::ostringstream oss;
-        oss <<"Opened ANT Channel #" << std::to_string(ch.cNum)
-            << " | Channel Type: 0x" + toHexByte(ch.cType)
-            << " | Device #: 0x" + toHexByte(ch.dNum)
-            << " | Device Type: 0x" + toHexByte(ch.dType)
-            << " | Tx Type: 0x" + toHexByte(ch.tType);
-        info(oss.str());
-        return true;
-    }
-
-    bool closeChannel(const uint8_t number) {
-        if (!pclANT) {
-            error("Failed to close channel #"
-                + std::to_string(number)
-                + "[closeChannel] ANT framer is not initialized");
-            return false;
-        }
-
-        if (!pclANT->CloseChannel(number)) {
-            error("Failed to close channel #" + std::to_string(number));
-            return false;
-        }
-
-        info("Channel #" + std::to_string(number) + " [CLOSED]");
-        return true;
     }
 
     bool startDiscovery() {
