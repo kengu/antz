@@ -65,10 +65,10 @@ void AssetTrackerDiscovery::handleMessage(const ANT_MESSAGE& msg, const uint8_t 
             const uint16_t devId = d[9] | (d[10] << 8);
             uint8_t flags = 0;
 
-            oss << " | Trailer bytes used: " << static_cast<int>(ext.trailerLength);
-            oss << " | "<< formatDeviceInfo(devId, ext.devType, ext.txType);
+            oss << " | Trailer bytes used: " << static_cast<int>(ext.length);
+            oss << " | "<< formatDeviceInfo(devId, ext.dType, ext.tType);
             if (ext.hasRssi) oss << " | RSSI: " << static_cast<int>(ext.rssi) << " dBm";
-            if (ext.hasProximity) oss << " | Proximity: " << static_cast<int>(ext.proximity);
+            if (ext.hasProximity) oss << " | Proximity: " << static_cast<int>(ext.threshold);
             oss << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
 
             info(oss.str());

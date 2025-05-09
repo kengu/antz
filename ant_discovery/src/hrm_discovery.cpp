@@ -19,7 +19,7 @@ bool HRMDiscovery::accept(const ANT_MESSAGE& msg, const uint8_t length, Extended
 
         if (length >= 14) {
             // Detect HRM only if DevType == 0x78
-            if (d[0] == 0x00 && ext.devType == deviceType_) {
+            if (d[0] == 0x00 && ext.dType == deviceType_) {
                 return true;
             }
         }
@@ -56,15 +56,15 @@ void HRMDiscovery::handleMessage(const ANT_MESSAGE& msg, const uint8_t length, E
                 flags = d[length - 1];
                 const uint8_t* trailer = d + (length - 1 - trailerLengthGuess(flags));
                 ext = parseExtendedInfo(trailer, flags);
-                devType = ext.devType;
-                txType = ext.txType;
+                devType = ext.dType;
+                txType = ext.tType;
             }
-            oss << " | Trailer bytes used: " << static_cast<int>(ext.trailerLength);
+            oss << " | Trailer bytes used: " << static_cast<int>(ext.length);
 
             oss << " | "<< formatDeviceInfo(devId, devType, txType);
 
             if (ext.hasRssi) oss << " | RSSI: " << static_cast<int>(ext.rssi) << " dBm";
-            if (ext.hasProximity) oss << " | Proximity: " << static_cast<int>(ext.proximity);
+            if (ext.hasProximity) oss << " | Proximity: " << static_cast<int>(ext.threshold);
 
             oss << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
 

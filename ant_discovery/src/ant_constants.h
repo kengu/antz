@@ -22,6 +22,9 @@ constexpr uint8_t USER_NETWORK_NUM              = 0;
 // Timeouts (adjust as needed)
 constexpr ULONG MESSAGE_TIMEOUT                 = 1000;
 
+// Rx Timestamp messaging is enabled if message data[12] is 0x20
+constexpr uint8_t RX_TIMESTAMP_FLAG             = 0x20;
+
 // RSSI extended messaging is enabled if message data[12] is 0x40
 constexpr uint8_t RSSI_EXT_FLAG                 = 0x40;
 
