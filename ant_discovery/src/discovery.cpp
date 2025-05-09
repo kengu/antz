@@ -204,7 +204,7 @@ namespace ant {
         uint8_t length = 0;
     };
 
-    struct TrackerDevice {
+    struct Device {
         uint8_t index{};
         uint8_t color = 0;
         uint8_t aType = 0;
@@ -367,7 +367,7 @@ namespace ant {
         return oss.str();
     }
 
-    std::string makeDeviceKey(const TrackerDevice& d) {
+    std::string makeDeviceKey(const Device& d) {
         std::ostringstream oss;
         oss << d.ext.channelId.number
             << ":" << static_cast<int>(d.ext.channelId.dType)
@@ -452,17 +452,18 @@ namespace ant {
         uint8_t offset = 0;
         ext.flags = data[9];
 
-        if (isDeviceChannelIdFlag(ext.flags)) {
+        if (isDeviceChannelIdExt(data)) {
             const uint8_t* trailer = &data[10];
 
             ext.hasDeviceChannelId = true;
             ext.channelId.number = parseDeviceNumber(trailer);
             offset = 2;
+
             ext.channelId.dType = static_cast<UCHAR>(trailer[offset++]);
             ext.channelId.tType = static_cast<UCHAR>(trailer[offset++]);
         }
 
-        if (isRssiFlag(ext.flags)) {
+        if (isRssiExt(data)) {
             const uint8_t* trailer = &data[10];
 
             ext.hasRssiValue = true;
@@ -471,13 +472,12 @@ namespace ant {
             ext.rssi.threshold = static_cast<UCHAR>(trailer[offset++]);
         }
 
-        if (isRxTimestampFlag(ext.flags)) {
+        if (isRxTimestampExt(data)) {
             const uint8_t* trailer = &data[10];
 
-            ext.hasRssiValue = true;
-            ext.rxTs.value = static_cast<UCHAR>(trailer[offset++]);
-            ext.rssi.value = static_cast<int8_t>(trailer[offset++]); // signed!
-            ext.rssi.threshold = static_cast<UCHAR>(trailer[offset++]);
+            ext.hasRxTsValue = true;
+            ext.rxTs.value = parseRxTs(trailer);
+            offset += 2;
         }
 
         ext.length = offset;
@@ -519,7 +519,7 @@ namespace ant {
         }
     }
 
-    bool parseDevice(const uint8_t* data, const uint8_t length, TrackerDevice& device){
+    bool parseDevice(const uint8_t* data, const uint8_t length, Device& device){
         const uint8_t* payload = &data[1];
         const uint8_t page = payload[0];
 
@@ -529,7 +529,9 @@ namespace ant {
             device.index = payload[1] & 0x1F;
         }
 
-        parseExtendedInfo(data, length, device.ext);
+        if (!parseExtendedInfo(data, length, device.ext)) {
+            warn("Unabled to parse Extended Message Format");
+        }
 
         const auto knownKey = makeDeviceKey(device);
 
@@ -617,27 +619,40 @@ namespace ant {
         return oss.str();
     }
 
+    // Forward declare
+    void checkChannelWatchdogs();
+
     // Assumes Broadcast Data message
     void dumpBroadcastRaw(const UCHAR ucMessageID, const UCHAR* data, const UCHAR length) {
-        TrackerDevice device;
-        const uint8_t ucChannel = data[0];
+        ExtendedInfo ext;
+        const uint8_t channel = data[0];
         std::ostringstream oss;
-        oss << "[DUMP] Channel: " << static_cast<int>(ucChannel)
+        oss << "[DUMP] Channel: " << static_cast<int>(channel)
             <<  " | Message ID: 0x" << toHexByte(ucMessageID);
 
+        if (parseExtendedInfo(data, length, ext)) {
+            channelStates[channel].active = true;
+            channelStates[channel].lastSeen = std::chrono::steady_clock::now();
 
-        if (parseDevice(data, length, device)) {
-            oss << " | Flags: 0x" << toHexByte(device.ext.flags);
-            oss << " | " << formatDeviceChannelID(device.ext);
+            if (ext.hasRssiValue) {
+                channelStates[channel].lastRssi = ext.rssi.value;
+            }
+
+
+            oss << " | Flags: 0x" << toHexByte(ext.flags);
+            oss << " | " << formatDeviceChannelID(ext);
         } else {
             const uint8_t flag = data[9];
             oss << " | Flags: 0x" << toHexByte(flag);
-            oss << " | No Device Data";
+            oss << " | Extended Message Data Missing";
         }
 
         oss << " | Raw Payload (" << std::dec << static_cast<int>(length) << "): " << toHex(data, length);
 
         fine(oss.str());
+
+        checkChannelWatchdogs();
+
     }
 
     bool initialize(const UCHAR ucDeviceNumber) {
@@ -738,8 +753,12 @@ namespace ant {
             return false;
         }
 
-        if (!pclANT->CloseChannel(number)) {
+        if (!pclANT->CloseChannel(number, MESSAGE_TIMEOUT)) {
             error("Failed to close channel #" + std::to_string(number));
+            return false;
+        }
+        if (!pclANT->UnAssignChannel(number, MESSAGE_TIMEOUT)) {
+            error("Failed to unassign channel #" + std::to_string(number));
             return false;
         }
 
@@ -747,7 +766,7 @@ namespace ant {
         return true;
     }
 
-    bool shouldRequestPageAgain(const TrackerDevice& d, const uint8_t page) {
+    bool shouldRequestPageAgain(const Device& d, const uint8_t page) {
         const std::string key = makeDeviceKey(d) + ":" + std::to_string(page);
         if (recentPageRequests.count(key)) {
             return false;
@@ -756,7 +775,7 @@ namespace ant {
         return true;
     }
 
-    void clearRequestCacheFor(const TrackerDevice& d) {
+    void clearRequestCacheFor(const Device& d) {
         const std::string prefix = makeDeviceKey(d) + ":";
         for (const int page : {0x10, 0x11}) {
             recentPageRequests.erase(prefix + std::to_string(page));
@@ -845,7 +864,7 @@ namespace ant {
     // Reference:
     // - ANT+ Device Profile – Tracker Rev. 1.0 (Section 4.3.5, 4.4.3)
     // -----------------------------------------------------------------------------
-    void requestAssetIdentification(const uint8_t channel, const TrackerDevice& device) {
+    void requestAssetIdentification(const uint8_t channel, const Device& device) {
         uint8_t request[8] = {
             PAGE_REQUEST,           // Page 70
             0xFF,                   // Reserved
@@ -890,7 +909,7 @@ namespace ant {
         }
     }
 
-    void requestAssetPages(const uint8_t channel, const TrackerDevice& device) {
+    void requestAssetPages(const uint8_t channel, const Device& device) {
         if (true) {
             // Request asset name (0x10 and 0x11)
             if (shouldRequestPageAgain(device, PAGE_LOCATION_1)) {
@@ -961,7 +980,7 @@ namespace ant {
     }
 
     void handleNoAssetsPage(const uint8_t* data, const uint8_t length) {
-        TrackerDevice device;
+        Device device;
 
         std::ostringstream oss;
         const uint8_t channel = data[0];
@@ -1021,7 +1040,7 @@ namespace ant {
     // - ANT+ Device Profile – Tracker Rev. 1.0 (Section 4.3 and 6)
     // -----------------------------------------------------------------------------
     void handleLocationPage1(const uint8_t* data, const uint8_t length) {
-        TrackerDevice device;
+        Device device;
         parseDevice(data, length, device);
 
         // Register device as paired
@@ -1065,7 +1084,7 @@ namespace ant {
     }
 
     void handleLocationPage2(const uint8_t* data, const uint8_t length) {
-        TrackerDevice device;
+        Device device;
         parseDevice(data, length, device);
 
         std::ostringstream oss;
@@ -1089,7 +1108,7 @@ namespace ant {
     // d[9] = flag (0x80)
     // d[10..13] = trailer: device number (LSB, MSB), device type, transmission type
     void handleIdentificationPage1(const uint8_t* data, const uint8_t length) {
-        TrackerDevice device;
+        Device device;
         parseDevice(data, length, device);
 
         std::ostringstream oss;
@@ -1113,7 +1132,7 @@ namespace ant {
     // d[9] = flag (0x80)
     // d[10..13] = trailer: device number (LSB, MSB), device type, transmission type
     void handleIdentificationPage2(const uint8_t* data, const uint8_t length) {
-        TrackerDevice device;
+        Device device;
         parseDevice(data, length, device);
 
         std::ostringstream oss;
@@ -1184,7 +1203,7 @@ namespace ant {
     }
 
     void handleDisconnectPage(const uint8_t* data, const uint8_t length) {
-        TrackerDevice device;
+        Device device;
         parseDevice(data, length, device);
 
         std::ostringstream oss;
@@ -1211,7 +1230,7 @@ namespace ant {
         oss << "[CH] #" << std::to_string(channel) << ": "
             << "[ASSET/?] Unknown page : 0x" << toHexByte(page);
 
-        TrackerDevice device{};
+        Device device{};
         if (parseDevice(data, length, device)) {
             if (isDeviceChannelIdExt(data)) {
                 oss << " | " << formatDeviceChannelID(device.ext);
@@ -1444,6 +1463,35 @@ namespace ant {
             }
         }
     }
+
+    void checkChannelWatchdogs() {
+        const auto now = std::chrono::steady_clock::now();
+
+        for (auto& entry : channelStates) {
+
+            ChannelState& state = entry.second;
+            if (!state.active) continue;
+
+            uint8_t channel = entry.first;
+
+            const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - state.lastSeen).count();
+            if (durationMs > WATCHDOG_TIMEOUT_MS) {
+                warn("[WATCHDOG] Channel #" + std::to_string(channel) +
+                     " unresponsive for " + std::to_string(durationMs) + "ms. Reinitializing...");
+
+                closeChannel(channel);
+                const auto it = std::find_if(channels.begin(), channels.end(), [&](const Channel& ch) {
+                    return ch.cNum == channel;
+                });
+
+                if (it != channels.end()) {
+                    openChannel(*it);
+                    state.lastSeen = now;  // Reset
+                }
+            }
+        }
+    }
+
 
     void cleanup() {
         searching = false;
