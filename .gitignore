@@ -1,8 +1,8 @@
 # Ignore CMake build artifacts
 .DS_Store
-*build/
+*build/*
 *CMakeFiles/
-CMakeCache.txt
+*CMakeCache.txt
 *cmake_install.cmake
 *Makefile
 *cmake-build-debug*
@@ -17,7 +17,7 @@ CMakeCache.txt
 *.log
 
 # Ignore generated compile_commands.json (optional)
-compile_commands.json
+*compile_commands.json
 
 # Keep distributed binaries in Bin/
 # But ignore intermediate garbage files in Bin
