@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/license-BSD%202--Clause-blue.svg)
 ![CMake](https://img.shields.io/badge/cmake-%3E=3.16-blue)
-![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Darwin-lightgrey)
 
 This monorepo contains a modular, cross-platform framework for working with ANT+ protocols. 
 While a primary use case is bridging Garmin trackers (such as Astro and Alpha series devices) to BLE, 
@@ -73,20 +73,20 @@ the platform you are developing code for. If you are developing for
 Mac, you should run the following command from the root of the repo;
 
 ```bash
-cmake -B build/macos -S . -DANTZ_PLATFORM=darwin
+cmake -B build/darwin -S . -DANTZ_PLATFORM=darwin
 ```
 
 You can compile ANT SDK for this platform with:
 
 ```bash
-cmake --build build/macos --target full_sdk_build
+cmake --build build/darwin --target full_sdk_build
 ```
 
 which builds binaries to `sdks/ANT-SDK_Mac.3.5/Bin`
 
 ## Apps 
 Each antz app is a concrete use case that uses antz to implement it. 
-They can be implemented for a concrete platform, or support multiple 
+They can be implemented for a concrete platform or support multiple 
 platforms. It all depends on the use case described in the README for 
 each of them.
 
@@ -106,7 +106,7 @@ This keeps compatibility while new modules are migrated incrementally. You can u
 cmake --build build/darwin --target ant_discovery
 ```
 
-If you have a ANT+ USB dongle connected to you development machine, run 
+If you have an ANT+ USB dongle connected to your development machine, run 
 ```bash
 sh ./ant_discovery/Bin/ant_discovery
 ```
@@ -114,10 +114,10 @@ to start discovery of HRM and Asset Tracker devices near you.
 
 ## 🐾 Use Case
 
-**antz** is especially relevant for Nordic hunting communities, where older **Garmin Astro + DC 50** collars are still in use and **cannot communicate via BLE**. This project bridges that gap:
+**Antz** is especially relevant for Nordic hunting communities, where older **Garmin Astro + DC 50** collars are still in use and **cannot communicate via BLE**. This project bridges that gap:
 
 * Adds mobile and cloud support to Astro-series devices
-* Extends life and utility of legacy Garmin tracking gear
+* Extends the life and utility of legacy Garmin tracking gear
 * Enables mixed Astro + Alpha setups from one phone
 
 ## 📜 License
@@ -129,6 +129,4 @@ Dual-licensed:
 
 ## 🔗 Contributing
 
-GitHub: [https://github.com/kengu/antz](https://github.com/kengu/antz)
-
-PRs and feedback welcome!
+GitHub: [https://github.com/kengu/antz](https://github.com/kengu/antz). PRs and feedback are welcome!
