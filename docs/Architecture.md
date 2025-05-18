@@ -46,16 +46,17 @@ antz/
 │       └── win/           # ANT USB stick using DSIFramerANT (PC SDK 3.5)
 │
 ├── apps/                  # Concrete products and test targets
-│   ├── ant_dongle_nrf5/   # Firmware for nRF52 BLE dongle
-│   ├── test_gui/          # Desktop test harness or visualizer
-│   └── explore_emulator/  # BLE simulator for Alpha X spoofing (future)
+│   ├── antz_discvery/     # Monolithic implementation of ANT+ discovery and profile decoding (legacy)
+│   ├── antz_brigde_nrf5/  # Firmware for nRF52 BLE dongle (future)
+│   ├── antz_test_gui/     # Desktop test harness or visualizer (future)
+│   └── antz_emulator/     # BLE simulator for Alpha X spoofing (future)
 │
 ├── sdks/                  # External SDKs (Mac, Linux, Windows)
 │   ├── ANT-SDK_Mac.3.5/   # Includes build fixes and CMake support (included in repo)
 │   ...                    # Additional SDKs are added here as needed 
 │
 ├── docs/                  # Documentation and specifications
-│   ├── Architecture.md    # This file
+│   ├── Architecture.md    # Outlines the architectural foundation of the `antz` project
 │   └── nrf5_platform.md   # Embedded firmware platform guidance
 ```
 
