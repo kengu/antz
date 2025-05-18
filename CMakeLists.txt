@@ -2,6 +2,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(antz LANGUAGES C CXX)
 
+# Enable minimum cxx version (see docs/cxx-requirements.md)
+set(CMAKE_CXX_STANDARD 17)
+
 # Enable verbose output
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 

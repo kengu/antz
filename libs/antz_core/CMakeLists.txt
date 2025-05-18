@@ -1,7 +1,10 @@
 # core/CMakeLists.txt
 
 add_library(antz_core STATIC
-        src/profiles/hrm/hrm_decoder.cpp
+        src/ant_channel.cpp
+        src/ant_event.cpp
+        src/ant_page.cpp
+        src/profiles/hrm_decoder.cpp
 #    profiles/asset_tracker/tracker_decoder.cpp
 #    events/device_state.cpp
 #    events/event_dispatcher.cpp
