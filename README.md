@@ -109,7 +109,7 @@ cmake --build build/darwin --target ant_discovery
 
 If you have an ANT+ USB dongle connected to your development machine, run 
 ```bash
-sh ./ant_discovery/Bin/ant_discovery
+sh ./ant_discovery/bin/ant_discovery
 ```
 to start discovery of HRM and Asset Tracker devices near you. 
 
