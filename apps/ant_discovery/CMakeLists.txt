@@ -1,40 +1,62 @@
+cmake_minimum_required(VERSION 3.16)
+
 project(ant_discovery)
 
-set(CMAKE_BUILD_TYPE Debug)
-add_definitions(-DDEBUG_FILE)
+option(ANTZ_PLATFORM "Platform for ANT+ SDK" "darwin")
+set(ANT_SDK_BASE "${CMAKE_SOURCE_DIR}/sdks")
 
-add_executable(ant_discovery
-        src/main.cpp
-        src/discovery.cpp
-        src/logging.h
-        src/ant_device.h
-        src/ant_profiles.h
-        src/hrm_discovery.cpp
-        src/asset_tracker_discovery.cpp
-        src/ant_constants.h
+# Platform-specific SDK config (expandable for multi-platform)
+if(ANTZ_PLATFORM STREQUAL "darwin")
+    set(ANT_SDK_PATH "${ANT_SDK_BASE}/ANT-SDK_Mac.3.5")
+    set(ANT_SDK_LIB antbase)
+    set(ANT_SDK_INCLUDE_DIRS
+        "${ANT_SDK_PATH}/Bin/include"
+        "${ANT_SDK_PATH}/Bin/include/inc"
+        "${ANT_SDK_PATH}/Bin/include/common"
+        "${ANT_SDK_PATH}/Bin/include/software"
+        "${ANT_SDK_PATH}/Bin/include/software/ANTFS"
+        "${ANT_SDK_PATH}/Bin/include/software/serial"
+        "${ANT_SDK_PATH}/Bin/include/software/serial/device_management"
+        "${ANT_SDK_PATH}/Bin/include/software/system"
+        "${ANT_SDK_PATH}/Bin/include/software/USB"
+        "${ANT_SDK_PATH}/Bin/include/software/USB/devices"
+        "${ANT_SDK_PATH}/Bin/include/software/USB/device_handles"
+        "${ANT_SDK_PATH}/Bin/include/software/USB/iokit_driver"
+    )
+    set(ANT_SDK_LIB_DIR "${ANT_SDK_PATH}/Bin")
+else ()
+    message(FATAL_ERROR "Unsupported platform: ${ANTZ_PLATFORM}")
+endif()
+
+set(SRC_FILES
+    src/main.cpp
+    src/discovery.cpp
+    src/hrm_discovery.cpp
+    src/asset_tracker_discovery.cpp
+    src/logging.h
+    src/ant_device.h
+    src/ant_profiles.h
+    src/ant_constants.h
 )
+
+add_executable(ant_discovery ${SRC_FILES})
 
 target_include_directories(ant_discovery PRIVATE
-        src
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/inc
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/common
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/ANTFS
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/serial
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/serial/device_management
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/system
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/USB
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/USB/devices
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/USB/device_handles
-        ${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin/include/software/USB/iokit_driver
+    src
+    ${ANT_SDK_INCLUDE_DIRS}
 )
 
-link_directories(${CMAKE_SOURCE_DIR}/sdks/ANT-SDK_Mac.3.5/Bin)
-target_link_libraries(ant_discovery PRIVATE antbase)
+target_compile_definitions(ant_discovery PRIVATE DEBUG_FILE)
 
+if(ANT_SDK_LIB_DIR)
+    link_directories(${ANT_SDK_LIB_DIR})
+endif()
+
+target_link_libraries(ant_discovery PRIVATE ${ANT_SDK_LIB})
+
+# Output to monorepo-idiomatic location (e.g., apps/ant_discovery/Bin)
 set_target_properties(ant_discovery PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY Bin
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Bin"
 )
 
-message(STATUS "Output path: ${CMAKE_CURRENT_SOURCE_DIR}/Bin")
+message(STATUS "ant_discovery output path: ${CMAKE_CURRENT_SOURCE_DIR}/Bin")

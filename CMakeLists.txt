@@ -35,20 +35,14 @@ endif()
 
 # Platform-specific SDK build targets
 if(ANTZ_PLATFORM STREQUAL "darwin")
+    add_subdirectory(sdks/ANT-SDK_Mac.3.5)
     add_custom_target(full_sdk_build DEPENDS full_build)
 else()
     message(WARNING "ANT SDK for Platform ${ANTZ_PLATFORM} have no full_sdk_build target")
 endif()
 
 # Optional: Include legacy monolithic ANT+ discovery module during migration
-option(ANTZ_DISCOVERY "Include ant_discovery app" ON)
+option(ANTZ_DISCOVERY "Include ant_discovery app" OFF)
 if(ANTZ_DISCOVERY)
     add_subdirectory(apps/ant_discovery)
-
-    if(ANTZ_PLATFORM STREQUAL "darwin")
-        add_subdirectory(sdks/ANT-SDK_Mac.3.5)
-    else()
-        message(FATAL_ERROR "SDK for platform ${ANTZ_PLATFORM} not supported")
-    endif()
-
 endif()
