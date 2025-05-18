@@ -10,20 +10,20 @@ if(ANTZ_PLATFORM STREQUAL "darwin")
     set(ANT_SDK_PATH "${ANT_SDK_BASE}/ANT-SDK_Mac.3.5")
     set(ANT_SDK_LIB antbase)
     set(ANT_SDK_INCLUDE_DIRS
-        "${ANT_SDK_PATH}/Bin/include"
-        "${ANT_SDK_PATH}/Bin/include/inc"
-        "${ANT_SDK_PATH}/Bin/include/common"
-        "${ANT_SDK_PATH}/Bin/include/software"
-        "${ANT_SDK_PATH}/Bin/include/software/ANTFS"
-        "${ANT_SDK_PATH}/Bin/include/software/serial"
-        "${ANT_SDK_PATH}/Bin/include/software/serial/device_management"
-        "${ANT_SDK_PATH}/Bin/include/software/system"
-        "${ANT_SDK_PATH}/Bin/include/software/USB"
-        "${ANT_SDK_PATH}/Bin/include/software/USB/devices"
-        "${ANT_SDK_PATH}/Bin/include/software/USB/device_handles"
-        "${ANT_SDK_PATH}/Bin/include/software/USB/iokit_driver"
+        "${ANT_SDK_PATH}/bin/include"
+        "${ANT_SDK_PATH}/bin/include/inc"
+        "${ANT_SDK_PATH}/bin/include/common"
+        "${ANT_SDK_PATH}/bin/include/software"
+        "${ANT_SDK_PATH}/bin/include/software/ANTFS"
+        "${ANT_SDK_PATH}/bin/include/software/serial"
+        "${ANT_SDK_PATH}/bin/include/software/serial/device_management"
+        "${ANT_SDK_PATH}/bin/include/software/system"
+        "${ANT_SDK_PATH}/bin/include/software/USB"
+        "${ANT_SDK_PATH}/bin/include/software/USB/devices"
+        "${ANT_SDK_PATH}/bin/include/software/USB/device_handles"
+        "${ANT_SDK_PATH}/bin/include/software/USB/iokit_driver"
     )
-    set(ANT_SDK_LIB_DIR "${ANT_SDK_PATH}/Bin")
+    set(ANT_SDK_LIB_DIR "${ANT_SDK_PATH}/bin")
 else ()
     message(FATAL_ERROR "Unsupported platform: ${ANTZ_PLATFORM}")
 endif()
@@ -54,9 +54,9 @@ endif()
 
 target_link_libraries(ant_discovery PRIVATE ${ANT_SDK_LIB})
 
-# Output to monorepo-idiomatic location (e.g., apps/ant_discovery/Bin)
+# Output to monorepo-idiomatic location (e.g., apps/ant_discovery/bin)
 set_target_properties(ant_discovery PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"
 )
 
-message(STATUS "ant_discovery output path: ${CMAKE_CURRENT_SOURCE_DIR}/Bin")
+message(STATUS "ant_discovery output path: ${CMAKE_CURRENT_SOURCE_DIR}/bin")
