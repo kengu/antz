@@ -43,7 +43,7 @@ antz/
 │       └── win/           # ANT USB stick using DSIFramerANT (PC SDK 3.5)
 │
 ├── apps/                  # Concrete products and test targets
-│   ├── antz_discvery/     # Monolithic implementation of ANT+ discovery and profile decoding (legacy)
+│   ├── antz_discovery/     # Monolithic implementation of ANT+ discovery and profile decoding (legacy)
 │   ├── antz_brigde_nrf5/  # Firmware for nRF52 BLE dongle (future)
 │   ├── antz_test_gui/     # Desktop test harness or visualizer (future)
 │   └── antz_emulator/     # BLE simulator for Alpha X spoofing (future)
