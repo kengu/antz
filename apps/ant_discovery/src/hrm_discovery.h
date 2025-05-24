@@ -17,7 +17,7 @@ constexpr UCHAR HRM_CHANNEL = 0;
 constexpr UCHAR HRM_CHANNEL_TYPE = 0x00;
 
 // Data is transmitted from the ANT+ heart rate monitor every
-// 8070/32768 seconds (4.06 Hz) however the receive rate may
+// 8070/32768 seconds (4.06 Hz) however, the receive rate may
 // be set lower if desired.
 constexpr USHORT HRM_CHANNEL_PERIOD = 8070;
 
@@ -25,7 +25,7 @@ constexpr USHORT HRM_CHANNEL_PERIOD = 8070;
 constexpr UCHAR HRM_DEVICE_TYPE = 0x78;
 
 // The default search timeout is set to 30 seconds in the receiver.
-// This timeout is implementation specific and can be set by the
+// This timeout is implementation-specific and can be set by the
 // designer to the appropriate value for the system.
 constexpr ULONG HRM_SEARCH_TIMEOUT = 0x30;
 

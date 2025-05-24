@@ -459,17 +459,17 @@ namespace ant {
             ext.channelId.number = parseDeviceNumber(trailer);
             offset = 2;
 
-            ext.channelId.dType = static_cast<UCHAR>(trailer[offset++]);
-            ext.channelId.tType = static_cast<UCHAR>(trailer[offset++]);
+            ext.channelId.dType = static_cast<uint8_t>(trailer[offset++]);
+            ext.channelId.tType = static_cast<uint8_t>(trailer[offset++]);
         }
 
         if (isRssiExt(data)) {
             const uint8_t* trailer = &data[10];
 
             ext.hasRssiValue = true;
-            ext.rssi.mType = static_cast<UCHAR>(trailer[offset++]);
+            ext.rssi.mType = static_cast<uint8_t>(trailer[offset++]);
             ext.rssi.value = static_cast<int8_t>(trailer[offset++]); // signed!
-            ext.rssi.threshold = static_cast<UCHAR>(trailer[offset++]);
+            ext.rssi.threshold = static_cast<uint8_t>(trailer[offset++]);
         }
 
         if (isRxTimestampExt(data)) {
@@ -624,13 +624,12 @@ namespace ant {
 
     // Assumes Broadcast Data message
     void dumpBroadcastRaw(const UCHAR ucMessageID, const UCHAR* data, const UCHAR length) {
-        ExtendedInfo ext;
         const uint8_t channel = data[0];
         std::ostringstream oss;
         oss << "[DUMP] Channel: " << static_cast<int>(channel)
             <<  " | Message ID: 0x" << toHexByte(ucMessageID);
 
-        if (parseExtendedInfo(data, length, ext)) {
+        if (ExtendedInfo ext; parseExtendedInfo(data, length, ext)) {
             channelStates[channel].active = true;
             channelStates[channel].lastSeen = std::chrono::steady_clock::now();
 
@@ -1366,9 +1365,7 @@ namespace ant {
         const UCHAR* d = msg.aucData;
         dumpBroadcastRaw(msg.ucMessageID, d, length);
 
-        const AntProfile profile = detectProfile(d);
-
-        switch (profile) {
+        switch (detectProfile(d)) {
             case AntProfile::HeartRate:
                 onHeartRateMessage(d, length);
                 break;

@@ -45,7 +45,7 @@ else()
 endif()
 
 # Optional: Include legacy monolithic ANT+ discovery module during migration
-option(ANTZ_DISCOVERY "Include ant_discovery app" OFF)
+option(ANTZ_DISCOVERY "Include ant_discovery app" ON)
 if(ANTZ_DISCOVERY)
     add_subdirectory(apps/ant_discovery)
 endif()
