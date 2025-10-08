@@ -676,7 +676,7 @@ namespace ant {
         pclANT = new DSIFramerANT(pclSerial);
         pclSerial->SetCallback(pclANT);
         if (!pclANT->Init()) {
-            info("Framer Init failed");
+            error("Framer Init failed: code " + std::to_string(pclANT->GetLastError()));
             return false;
         }
         if (!pclSerial->Open()) {
@@ -685,7 +685,7 @@ namespace ant {
         }
 
         pclANT->ResetSystem();
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         while (true) {
             const USHORT length = pclANT->WaitForMessage(MESSAGE_TIMEOUT);

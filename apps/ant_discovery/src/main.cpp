@@ -103,6 +103,7 @@ static void onSignal(int) {
 
 int main() {
     std::signal(SIGINT, onSignal);
+    std::signal(SIGTERM, onSignal);
     try {
 
         UCHAR deviceNumber = 0xFF;
