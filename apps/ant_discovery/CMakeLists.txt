@@ -28,18 +28,19 @@ elseif(ANTZ_PLATFORM STREQUAL "linux")
     set(ANT_SDK_PATH "${ANT_SDK_BASE}/ANT-SDK_Linux_3.8.200_BETA")
     set(ANT_SDK_LIB antbase)
     set(ANT_SDK_INCLUDE_DIRS
-        "${ANT_SDK_PATH}/bin/include"
-        "${ANT_SDK_PATH}/bin/include/inc"
-        "${ANT_SDK_PATH}/bin/include/common"
-        "${ANT_SDK_PATH}/bin/include/software"
-        "${ANT_SDK_PATH}/bin/include/software/ANTFS"
-        "${ANT_SDK_PATH}/bin/include/software/serial"
-        "${ANT_SDK_PATH}/bin/include/software/serial/device_management"
-        "${ANT_SDK_PATH}/bin/include/software/system"
-        "${ANT_SDK_PATH}/bin/include/software/USB"
-        "${ANT_SDK_PATH}/bin/include/software/USB/devices"
-        "${ANT_SDK_PATH}/bin/include/software/USB/device_handles"
-        "${ANT_SDK_PATH}/bin/include/software/USB/iokit_driver"
+        "${ANT_SDK_PATH}/ANT_LIB"
+        "${ANT_SDK_PATH}/ANT_LIB/inc"
+        "${ANT_SDK_PATH}/ANT_LIB/common"
+        "${ANT_SDK_PATH}/ANT_LIB/software"
+        "${ANT_SDK_PATH}/ANT_LIB/software/ANTFS"
+        "${ANT_SDK_PATH}/ANT_LIB/software/serial"
+        "${ANT_SDK_PATH}/ANT_LIB/software/serial/device_management"
+        "${ANT_SDK_PATH}/ANT_LIB/software/system"
+        "${ANT_SDK_PATH}/ANT_LIB/software/USB"
+        "${ANT_SDK_PATH}/ANT_LIB/software/USB/devices"
+        "${ANT_SDK_PATH}/ANT_LIB/software/USB/device_handles"
+        "${ANT_SDK_PATH}/ANT_LIB/software/USB/iokit_driver"
+        "${ANT_SDK_PATH}/ANT_LIB/software/serial"
     )
     set(ANT_SDK_LIB_DIR "${ANT_SDK_PATH}/bin")
 else ()

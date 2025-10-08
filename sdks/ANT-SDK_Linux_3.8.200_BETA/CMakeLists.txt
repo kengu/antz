@@ -22,6 +22,7 @@ include_directories(
     ANT_LIB/software/USB/devices
     ANT_LIB/software/USB/device_handles
     ANT_LIB/software/USB/libusb_driver
+    ANT_LIB/libraries
 )
 
 # Global defines
