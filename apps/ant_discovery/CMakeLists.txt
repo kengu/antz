@@ -28,6 +28,7 @@ elseif(ANTZ_PLATFORM STREQUAL "linux")
     set(ANT_SDK_PATH "${ANT_SDK_BASE}/ANT-SDK_Linux_3.8.200_BETA")
     set(ANT_SDK_LIB antbase)
     set(ANT_SDK_INCLUDE_DIRS
+        "${ANT_SDK_PATH}/ANT_DLL"
         "${ANT_SDK_PATH}/ANT_LIB"
         "${ANT_SDK_PATH}/ANT_LIB/inc"
         "${ANT_SDK_PATH}/ANT_LIB/common"

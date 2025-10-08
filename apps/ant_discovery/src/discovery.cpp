@@ -1,4 +1,4 @@
-    #include "types.h"
+#include "types.h"
 #include "dsi_framer_ant.hpp"
 #include "dsi_serial_generic.hpp"
 #include "ant.h"
@@ -16,6 +16,10 @@
 #include "asset_tracker_discovery.h"
 #include "dsi_debug.hpp"
 #include "hrm_discovery.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 constexpr UCHAR USER_CHANNEL_ASSET = 1;
 
