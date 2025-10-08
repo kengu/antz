@@ -48,7 +48,10 @@ set(ANTBASE_C_SRC
 )
 
 # Find required system libraries
-find_package(LibUSB REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+include_directories(${LIBUSB_INCLUDE_DIRS})
+link_libraries(${LIBUSB_LIBRARIES})
 find_package(Threads REQUIRED)
 
 # Static library: libantbase.a
