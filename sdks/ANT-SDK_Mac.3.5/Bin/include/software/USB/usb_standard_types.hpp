@@ -39,7 +39,7 @@ extern "C" {
 /** \ingroup desc
  * Device and/or Interface Class codes */
 enum libusb_class_code {
-   /** In the context of a \ref libusb_device_descriptor "device descriptor",
+   /** In the hal of a \ref libusb_device_descriptor "device descriptor",
     * this bDeviceClass value indicates that each interface specifies its
     * own class information and all interfaces operate independently.
     */
@@ -274,7 +274,7 @@ struct libusb_device_descriptor {
 
    /** Descriptor type. Will have value
     * \ref libusb_descriptor_type::LIBUSB_DT_DEVICE LIBUSB_DT_DEVICE in this
-    * context. */
+    * hal. */
    uint8_t  bDescriptorType;
 
    /** USB specification release number in binary-coded decimal. A value of
@@ -328,7 +328,7 @@ struct libusb_endpoint_descriptor {
 
    /** Descriptor type. Will have value
     * \ref libusb_descriptor_type::LIBUSB_DT_ENDPOINT LIBUSB_DT_ENDPOINT in
-    * this context. */
+    * this hal. */
    uint8_t  bDescriptorType;
 
    /** The address of the endpoint described by this descriptor. Bits 0:3 are
@@ -378,7 +378,7 @@ struct libusb_interface_descriptor {
 
    /** Descriptor type. Will have value
     * \ref libusb_descriptor_type::LIBUSB_DT_INTERFACE LIBUSB_DT_INTERFACE
-    * in this context. */
+    * in this hal. */
    uint8_t  bDescriptorType;
 
    /** Number of this interface */
@@ -429,7 +429,7 @@ struct libusb_config_descriptor {
 
    /** Descriptor type. Will have value
     * \ref libusb_descriptor_type::LIBUSB_DT_CONFIG LIBUSB_DT_CONFIG
-    * in this context. */
+    * in this hal. */
    uint8_t  bDescriptorType;
 
    /** Total length of data returned for this configuration */

@@ -166,7 +166,7 @@ ANTFSHostChannel::ANTFSHostChannel()
    }
 
    //If the init fails, something is broken and nothing is going to work anyway
-   //additionally the logging isn't even setup at this point
+   //additionally the logger isn't even setup at this point
    //so we throw an exception so we know something is broken right away
    if(bInitFailed == TRUE)
       throw "ANTFS constructor: init failed";
@@ -502,7 +502,7 @@ void ANTFSHostChannel::ProcessMessage(ANT_MESSAGE* pstMessage_, USHORT usMesgSiz
            else // this is an event
            {
               memcpy(aucRxBuf, pstMessage_->aucData, usMesgSize_);
-              bProcessed = ANTChannelEventProcess(ucANTChannel, pstMessage_->aucData[MESG_EVENT_CODE_OFFSET]); // pass through any events not handled here
+              bProcessed = ANTChannelEventProcess(ucANTChannel, pstMessage_->aucData[MESG_EVENT_CODE_OFFSET]); // pass through any event not handled here
            }
            break;
 

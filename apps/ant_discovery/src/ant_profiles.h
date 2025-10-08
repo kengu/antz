@@ -2,7 +2,7 @@
 // Created by Kenneth Gulbrandsøy on 05/05/2025.
 //
 
-// ant_profile.h
+// antz_profile.h
 #ifndef ANT_PROFILES_H
 #define ANT_PROFILES_H
 

@@ -766,8 +766,8 @@ class ANTFSClientChannel : public ANTFSClientInterface, public DSIANTMessageProc
       // occurred.  If no response is pending at the time the timeout
       // expires, ANTFS_CLIENT_RESPONSE_NONE is returned.
       // Operation:
-      // Some of the events return parameters associated with the event.
-      // Possible events and parameters:
+      // Some of the event return parameters associated with the event.
+      // Possible event and parameters:
       //    ANTFS_CLIENT_RESPONSE_PAIRING_REQUEST   -  GetHostName()
       //    ANTFS_CLIENT_RESPONSE_DOWNLOAD_REQUEST  -  GetRequestParameters()
       //    ANTFS_CLIENT_RESPONSE_UPLOAD_REQUEST    -  GetRequestParameters()

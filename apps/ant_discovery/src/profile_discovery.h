@@ -90,7 +90,7 @@ public:
         return channel_;
     }
 
-    // Get profile type (AntProfile) for logging or other purposes
+    // Get profile type (AntProfile) for logger or other purposes
     AntProfile getProfileType() const {
         return profileType;
     }

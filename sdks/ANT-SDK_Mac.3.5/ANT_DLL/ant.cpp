@@ -1984,7 +1984,7 @@ static void SerialHaveMessage(ANT_MESSAGE& stMessage_, USHORT usSize_)
 
 
    //Process the message to determine whether it is a response event or one
-   //of the channel events and call the appropriate event function.
+   //of the channel event and call the appropriate event function.
    switch (stMessage_.ucMessageID)
    {
       case MESG_RESPONSE_EVENT_ID:
@@ -2007,7 +2007,7 @@ static void SerialHaveMessage(ANT_MESSAGE& stMessage_, USHORT usSize_)
                break;
 
             memcpy(sLink[ucANTChannel].pucRxBuffer, stMessage_.aucData, usSize_);
-            sLink[ucANTChannel].pfLinkEvent(ucANTChannel, stMessage_.aucData[MESG_EVENT_CODE_OFFSET]); // pass through any events not handled here
+            sLink[ucANTChannel].pfLinkEvent(ucANTChannel, stMessage_.aucData[MESG_EVENT_CODE_OFFSET]); // pass through any event not handled here
          }
          break;
       }

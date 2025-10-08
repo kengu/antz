@@ -38,13 +38,20 @@ fallback can be considered if needed.
 - Reduces technical debt compared to using manual unions, tag+pointer structures, or custom type erasure.
 - Aligns with industry best practices for new C++ projects.
 
+
+### 5. Support variadic macro handling 
+C++17 is no longer sufficient. This project now requires C++20 (`CMAKE_CXX_STANDARD 20`).  
+Certain essential features—such as correct variadic macro handling (via `__VA_OPT__`), concepts, 
+and expanded compile-time support—require C++20. Please ensure your toolchain and environment are 
+updated accordingly.
+
 ## Summary
 
-Requiring C++17 via `CMAKE_CXX_STANDARD 17` enables the use of safer, more expressive, and 
+Requiring C++17 via `CMAKE_CXX_STANDARD 20` enables the use of safer, more expressive, and 
 future-proof constructs—notably `std::variant`—that are key to the architecture and scalability 
 of this project.
 
 ## Decision
 
-We add `set(CMAKE_CXX_STANDARD 17)` to the top-level for consistent project-wide C++17 enforcement. 
+We add `set(CMAKE_CXX_STANDARD 20)` to the top-level for consistent project-wide C++17 enforcement. 
 

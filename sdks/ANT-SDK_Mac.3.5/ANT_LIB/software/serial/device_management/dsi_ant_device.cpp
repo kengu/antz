@@ -79,7 +79,7 @@ DSIANTDevice::DSIANTDevice()
    }
 
    //If the init fails, something is broken and nothing is going to work anyway
-   //additionally the logging isn't even setup at this point
+   //additionally the logger isn't even setup at this point
    //so we throw an exception so we know something is broken right away
    if(bInitFailed == TRUE)
       throw "AntDevice constructor: init failed";

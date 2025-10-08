@@ -104,7 +104,7 @@ struct usb_device_descriptor
 
    /** Descriptor type. Will have value
     * \ref libusb_descriptor_type::LIBUSB_DT_DEVICE LIBUSB_DT_DEVICE in this
-    * context. */
+    * hal. */
    uint8_t  bDescriptorType;
 
    /** USB specification release number in binary-coded decimal. A value of

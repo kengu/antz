@@ -642,7 +642,7 @@ void ANTFSClientChannel::ProcessMessage(ANT_MESSAGE* pstMessage_, USHORT usMesgS
            else // this is an event
            {
               memcpy(aucRxBuf, pstMessage_->aucData, usMesgSize_);
-              bProcessed = ANTChannelEventProcess(ucANTChannel, pstMessage_->aucData[MESG_EVENT_CODE_OFFSET]); // pass through any events not handled here
+              bProcessed = ANTChannelEventProcess(ucANTChannel, pstMessage_->aucData[MESG_EVENT_CODE_OFFSET]); // pass through any event not handled here
            }
            break;
 

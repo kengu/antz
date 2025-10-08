@@ -172,7 +172,7 @@ void Test_Init(UCHAR ucDeviceNumber_, UCHAR ucChannelType_)
    assert(bStatus);
 
    // Assign callback functions. One for serial message responses
-   // and the other for channel events. Each channel event can have
+   // and the other for channel event. Each channel event can have
    // its own callback function defined. Since we are only
    // going to open one channel, setup one callback function
    // for the channel callback

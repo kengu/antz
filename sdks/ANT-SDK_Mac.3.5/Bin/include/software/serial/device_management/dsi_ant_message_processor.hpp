@@ -81,7 +81,7 @@ class DSIANTMessageProcessor
 
       virtual void ProcessDeviceNotification(ANT_DEVICE_NOTIFICATION eCode_, void* pvParameter_) = 0;
       /////////////////////////////////////////////////////////////////
-      // Processes device level notifications regarding events that
+      // Processes device level notifications regarding event that
       // may impact the operation of the associated channel
       // Parameters:
       //    eCode_:           Device notification event code

@@ -152,7 +152,7 @@ BOOL Demo::Init(UCHAR ucDeviceNumber_, UCHAR ucChannelType_)
    assert(ucMutexInit == DSI_THREAD_ENONE);
 
 #if defined(DEBUG_FILE)
-   // Enable logging
+   // Enable logger
    DSIDebug::Init();
    DSIDebug::SetDebug(TRUE);
 #endif

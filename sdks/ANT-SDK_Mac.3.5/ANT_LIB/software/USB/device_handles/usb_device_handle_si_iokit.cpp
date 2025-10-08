@@ -60,7 +60,7 @@ const UCHAR USB_ANT_EP_OUT = 0x01;
 #define SI_REQ_RESET                   ((UCHAR)0x11)        // Reset
 #define SI_REQ_PURGE                   ((UCHAR)0x12)        // Purge
 #define SI_REQ_SET_FLOW                ((UCHAR)0x13)        // Set flow control
-#define SI_REQ_EMBED_EVENTS            ((UCHAR)0x15)        // Control embedding of events in data stream
+#define SI_REQ_EMBED_EVENTS            ((UCHAR)0x15)        // Control embedding of event in data stream
 #define SI_REQ_SET_CHARS               ((UCHAR)0x19)        // Set special characters.
 
 //bit 0-4 of request type bitmap

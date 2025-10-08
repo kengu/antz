@@ -1924,7 +1924,7 @@ ANTFRAMER_RETURN DSIFramerANT::SendANTFSTransfer(UCHAR ucANTChannel_, UCHAR* puc
                   pclBroadcastResponse->bResponseReady = FALSE;
                   pclAcknowledgeResponse->bResponseReady = FALSE;
 
-                  if (ucSyncMesgCount++ > 2)                   //If we get more than 2 sync events (3 or 4) when we're waiting for our transfer to complete
+                  if (ucSyncMesgCount++ > 2)                   //If we get more than 2 sync event (3 or 4) when we're waiting for our transfer to complete
                   {
                      pclErrorResponse->bResponseReady = TRUE;  //Set the error response flag
                   }

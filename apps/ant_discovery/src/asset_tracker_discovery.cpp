@@ -21,7 +21,7 @@
 // - Device ID must be non-zero
 //
 // Optional fields (distance, bearing, etc) are *not* required to be valid
-// during pairing – but may affect user confidence or be used for logging.
+// during pairing – but may affect user confidence or be used for logger.
 // -------------------------------------------------------------------------
 
 bool AssetTrackerDiscovery::accept(const ANT_MESSAGE& msg, const uint8_t length, ExtendedInfo& ext) {
