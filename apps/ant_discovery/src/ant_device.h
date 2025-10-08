@@ -6,6 +6,7 @@
 #ifndef ANT_DEVICE_H
 #define ANT_DEVICE_H
 
+#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <string>
