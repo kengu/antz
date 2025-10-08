@@ -49,14 +49,16 @@ int main() {
 */
 
 #include "discovery.hpp"
-#include <iostream>
-
-#include <csignal>
-
 #include "types.h"
-
 #include <execinfo.h>
+
+#include <iostream>
+#include <csignal>
 #include <stdexcept>
+#include <thread>
+#include <chrono>
+#include <atomic>
+#include <unistd.h>
 
 void print_stacktrace() {
     constexpr int max_frames = 64;
@@ -72,10 +74,30 @@ void print_stacktrace() {
     free(symbols);
 }
 
+std::atomic<bool> cleanup_done{false};
+
+void cleanupWrapper() {
+    ant::cleanup();
+    cleanup_done = true;
+}
 
 static void onSignal(int) {
     std::cout << "CTRL+C detected, cleanup..." << std::endl;
-    ant::cleanup();
+
+    // Start cleanup in another thread
+    std::thread t(cleanupWrapper);
+
+    // Wait up to 5 seconds for cleanup to finish
+    for (int i = 0; i < 50; ++i) {
+        if (cleanup_done) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (!cleanup_done) {
+        std::cerr << "Cleanup did not finish within timeout! Forcing exit..." << std::endl;
+        ::_exit(1); // Immediate hard exit, bypassing normal shutdown
+    }
+    t.join();
     std::exit(0);
 }
 
