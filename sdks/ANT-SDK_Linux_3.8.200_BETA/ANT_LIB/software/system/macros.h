@@ -22,6 +22,7 @@ All rights reserved.
 #include "types.h"
 
 #include <stdio.h>
+#include <stdarg.h>
 
 #ifdef __cplusplus
 extern "C" {
