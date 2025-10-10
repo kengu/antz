@@ -59,6 +59,7 @@ int main() {
 #include <chrono>
 #include <atomic>
 #include <unistd.h>
+#include <software/USB/device_handles/usb_device_handle.hpp>
 
 void print_stacktrace() {
     constexpr int max_frames = 64;
@@ -105,6 +106,29 @@ int main() {
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
     try {
+
+        // Get all ANT devices (detected via USB)
+        ANTDeviceList devList = USBDeviceHandle::GetAllDevices();
+
+        std::cout << "Number of ANT devices found: " << devList.GetSize() << std::endl;
+        for (unsigned int i = 0; i < devList.GetSize(); ++i) {
+            const USBDevice& dev = *devList[i];
+            std::cout << "[" << i << "]: Vendor ID: 0x" << std::hex << dev.GetVid()
+                      << ", Product ID: 0x" << std::hex << dev.GetPid() << std::dec;
+
+            // Serial string
+            char serialBuf[128] = {0};
+            if (dev.GetSerialString(reinterpret_cast<UCHAR*>(serialBuf), sizeof(serialBuf) - 1)) {
+                std::cout << ", Serial: " << serialBuf;
+            }
+
+            // Product description
+            char prodBuf[128] = {0};
+            if (dev.GetProductDescription(reinterpret_cast<UCHAR*>(prodBuf), sizeof(prodBuf) - 1)) {
+                std::cout << ", Product: " << prodBuf;
+            }
+            std::cout << std::endl;
+        }
 
         UCHAR deviceNumber = 0xFF;
         if (deviceNumber == 0xFF) {
