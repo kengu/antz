@@ -658,15 +658,16 @@ namespace ant {
 
     }
 
-    bool initialize(const UCHAR ucDeviceNumber) {
+    bool initialize(const USBDevice& pDevice, const UCHAR ucDeviceNumber) {
 
         DSIDebug::Init();
         DSIDebug::SetDebug(true);
+        DSIDebug::SerialEnable(ucDeviceNumber, true);
 
         info("ANT initialization started...");
 
         pclSerial = new DSISerialGeneric();
-        if (!pclSerial->Init(50000, ucDeviceNumber)) {
+        if (!pclSerial->Init(50000, pDevice, ucDeviceNumber)) {
             std::ostringstream oss;
             oss << "Failed to open USB port " << static_cast<int>(ucDeviceNumber);
             info(oss.str());
@@ -680,7 +681,7 @@ namespace ant {
             return false;
         }
         if (!pclSerial->Open()) {
-            info("Serial Open failed");
+            info("Serial Open failed: USB Device [" + std::to_string(ucDeviceNumber) + "]") ;
             return false;
         }
 
