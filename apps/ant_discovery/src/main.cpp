@@ -1,13 +1,13 @@
 #include "discovery.hpp"
 #include "types.h"
 #include <execinfo.h>
+#include "usb_checker.cpp"
 
 #include <iostream>
 #include <csignal>
 #include <stdexcept>
 #include <thread>
 #include <chrono>
-#include <atomic>
 #include <unistd.h>
 #include <usb_device_handle.hpp>
 
@@ -25,30 +25,9 @@ void print_stacktrace() {
     free(symbols);
 }
 
-std::atomic<bool> cleanup_done{false};
-
-void cleanupWrapper() {
-    ant::cleanup();
-    cleanup_done = true;
-}
-
 static void onSignal(int) {
     std::cout << "CTRL+C detected, cleanup..." << std::endl;
-
-    // Start cleanup in another thread
-    std::thread t(cleanupWrapper);
-
-    // Wait up to 5 seconds for cleanup to finish
-    for (int i = 0; i < 50; ++i) {
-        if (cleanup_done) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    if (!cleanup_done) {
-        std::cerr << "Cleanup did not finish within timeout! Forcing exit..." << std::endl;
-        ::_exit(1); // Immediate hard exit, bypassing normal shutdown
-    }
-    t.join();
+    ant::cleanup();
     std::exit(0);
 }
 
@@ -56,6 +35,12 @@ int main() {
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
     try {
+
+        if (!check_usb_is_available())
+        {
+            std::cout << "USB is not available." << std::endl;
+            return 1;
+        }
 
         // Get all ANT devices (detected via USB)
         const ANTDeviceList devList = USBDeviceHandle::GetAllDevices();

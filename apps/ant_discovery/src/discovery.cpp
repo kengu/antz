@@ -654,8 +654,6 @@ namespace ant {
 
         fine(oss.str());
 
-        checkChannelWatchdogs();
-
     }
 
     bool initialize(const USBDevice& pDevice, const UCHAR ucDeviceNumber) {
@@ -1419,6 +1417,8 @@ namespace ant {
             auto now = std::chrono::steady_clock::now();
             const USHORT length = pclANT->WaitForMessage(MESSAGE_TIMEOUT);
 
+            if (!searching) return;
+
             if (length == DSI_FRAMER_TIMEDOUT || length == 0) {
                 const auto secondsSinceLast = std::chrono::duration_cast<std::chrono::seconds>(now - lastMessageTime).count();
                 if (secondsSinceLast > 5) {
@@ -1435,6 +1435,7 @@ namespace ant {
 
             ANT_MESSAGE msg;
             pclANT->GetMessage(&msg);
+            if (!searching) return;
 
             const UCHAR ucMessageID = msg.ucMessageID;
 
@@ -1461,7 +1462,7 @@ namespace ant {
 
                 lastMessageTime = now;
                 dispatchBroadcastDataMessage(msg, length);
-
+                checkChannelWatchdogs();
             }
         }
     }
@@ -1515,7 +1516,6 @@ namespace ant {
             pclANT->CloseChannel(2);
             pclANT->UnAssignChannel(2);
             */
-
             if(!pclANT->ResetSystem()) {
                 error("Failed to reset ANT System");
             }
@@ -1523,6 +1523,7 @@ namespace ant {
             delete pclANT;
             pclANT = nullptr;
         }
+
         if (pclSerial) {
             pclSerial->Close();
             delete pclSerial;
