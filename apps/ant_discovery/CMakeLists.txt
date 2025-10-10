@@ -50,6 +50,7 @@ endif()
 
 set(SRC_FILES
     src/main.cpp
+    src/usb_checker.cpp
     src/discovery.cpp
     src/hrm_discovery.cpp
     src/asset_tracker_discovery.cpp
