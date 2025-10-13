@@ -17,8 +17,8 @@ This module is temporarily preserved during the migration to the modular
 - Handles channel assignment, extended message decoding, and page-based data interpretation
 - Contains initial implementation of event loop, retry logic, and basic device caching
 
-## Build dependencies
-You need to install the following packages on your system:
+## Build dependencies on Linux
+You need to install the following packages on Linux:
 ```bash
 # Update package list
 sudo apt update
@@ -26,6 +26,19 @@ sudo apt update
 sudo apt install -y build-essential cmake git pkg-config
 # libusb for USB access
 sudo apt install -y libusb-1.0-0-dev
+```
+
+## Build dependencies on MacOS (Darwin)
+You need to install the following packages on Darwin:
+```bash
+# Update package list
+sudo brew update
+# Core build tools and compilers
+brew install cmake make pkg-config
+# C++ standard library and headers (provided by Xcode Command Line Tools)
+xcode-select --install
+# libusb for USB device access
+brew install libusb
 ```
 
 ## ⚙️ Build Instructions
