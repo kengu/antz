@@ -128,10 +128,14 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        if (verbose && outputFormat == ant::OutputFormat::Text){
-            logLevel = ant::LogLevel::Fine;
-        } else{
-            logLevel = ant::LogLevel::None;
+        if (verbose){
+            logLevel = outputFormat == ant::OutputFormat::Text
+                ? ant::LogLevel::Fine
+                : ant::LogLevel::Info;
+        } else {
+            logLevel = outputFormat == ant::OutputFormat::Text
+                ? ant::LogLevel::Info
+                : ant::LogLevel::None;
         }
 
         ant::setLogLevel(logLevel);

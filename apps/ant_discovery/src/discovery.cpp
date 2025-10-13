@@ -236,7 +236,7 @@ namespace ant {
     static std::set<std::string> pairedDevices;
     static std::set<std::string> recentPageRequests;
     static std::map<std::string, std::set<uint8_t>> knownIndexes;
-    static std::map<std::string, std::map<uint8_t, NameInfo>> knownNames;
+    static std::map<std::string, std::map<uint8_t, Device>> knownDevices;
     static std::map<std::string, std::map<uint8_t, uint16_t>> knownLatitudes;
 
     static std::map<uint8_t, ChannelState> channelStates;
@@ -514,7 +514,7 @@ namespace ant {
             case AssetSituation::Pointed:   return "On Point";
             case AssetSituation::Treed:     return "Treed";
             case AssetSituation::Moving:    return "Moving";
-            case AssetSituation::Sitting:    return "Sitting";
+            case AssetSituation::Sitting:   return "Sitting";
             default:                        return "Invalid";
         }
     }
@@ -533,8 +533,16 @@ namespace ant {
             warn("Unabled to parse Extended Message Format");
         }
 
+        // Preserve current message's Extended Info, then seed all fields from known state (if any)
+        const ExtendedInfo currentExt = device.ext; // latest Rx trailer from this packet
         const auto knownKey = makeDeviceKey(device);
-        device.name = knownNames[knownKey][device.index];
+        if (const auto devIt = knownDevices.find(knownKey); devIt != knownDevices.end()) {
+            if (const auto idxIt = devIt->second.find(device.index); idxIt != devIt->second.end()) {
+                // Safe deep copy of std::string/etc. Then override with latest ext from this message
+                device = idxIt->second;
+                device.ext = currentExt;
+            }
+        }
 
         switch (page) {
             // Data Page 0x01 (Location Page 1) contains:
@@ -578,8 +586,7 @@ namespace ant {
                 device.color = payload[2];
                 const std::string uName(reinterpret_cast<const char*>(&payload[3]),
                         strnlen(reinterpret_cast<const char*>(&payload[3]), 5));
-                knownNames[knownKey][device.index] = {.uName = uName};
-                device.name = knownNames[knownKey][device.index];
+                device.name.uName = uName;
                 break;
             }
             case PAGE_IDENTIFICATION_2: {
@@ -587,13 +594,15 @@ namespace ant {
                     const std::string lName(reinterpret_cast<const char*>(&payload[3]),
                             strnlen(reinterpret_cast<const char*>(&payload[3]), 5));
 
-                device.name = knownNames[knownKey][device.index];
-                device.name.lName = lName;
                 device.name.lName = lName;
                 device.name.fName = device.name.uName + lName;
                 break;
             }
             default: break;
+        }
+
+        if (isDevice){
+            knownDevices[knownKey][device.index] = device;
         }
 
         return isDevice;
@@ -698,24 +707,26 @@ namespace ant {
                 }
                 if(device) {
                     if (needComma) oss << ",";
-                    oss << "\"index\":" << static_cast<int>(device->index) << ",";
+                    oss << R"("name":")" << jsonEscape(!device->name.fName.empty() ? device->name.fName : device->name.uName) << "\",";
+                    oss << R"("index:")" << static_cast<int>(device->index) << ",";
+                    oss << R"("color":"0x)" << static_cast<int>(device->color) << ",";
                     oss << R"("type":"0x)" << toHexByte(device->ext.deviceId.dType) << "\",";
                     oss << R"("id":"0x)" << toHexByte(device->ext.deviceId.number) << "\",";
-                    oss << R"("name":")" << jsonEscape(!device->name.fName.empty() ? device->name.fName : device->name.uName) << "\",";
-                    oss << "\"lat\":" << device->lat << ",";
-                    oss << "\"lon\":" << device->lon << ",";
-                    oss << "\"distance\":" << device->distance << ",";
-                    oss << "\"heading\":" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
+                    oss << R"("lat:")" << device->lat << ",";
+                    oss << R"("long:")" << device->lon << ",";
+                    oss << R"("distance:")" << device->distance << ",";
+                    oss << R"("heading:")" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
                     oss << R"("situation":")" << toAssetSituationString(device->situation) << "\",";
-                    oss << R"("flags":"0x)" << toHexByte(device->ext.flags) << "\",";
-                    oss << "\"gpsLost\":" << (device->gpsLost ? "true" : "false") << ",";
-                    oss << "\"commsLost\":" << (device->commsLost ? "true" : "false") << ",";
-                    oss << "\"lowBattery\":" << (device->lowBattery ? "true" : "false") << ",";
+                    oss << R"("gpsLost:")" << (device->gpsLost ? "true" : "false") << ",";
+                    oss << R"("commsLost:")" << (device->commsLost ? "true" : "false") << ",";
+                    oss << R"("lowBattery:")" << (device->lowBattery ? "true" : "false") << ",";
+                    oss << R"("remove:")" << (device->remove ? "true" : "false");
                     needComma = true;
                 }
-                if (needComma) oss << ",";
                 if (logLevel <= LogLevel::Info) {
-                    oss << R"("text":")" << jsonEscape(text) << "\"";
+                    if (needComma) oss << ",";
+                    if (device) oss << R"(,"flags":"0x)" << toHexByte(device->ext.flags);
+                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
                 }
                 oss << "}";
                 std::cout << oss.str() << std::endl;
@@ -725,7 +736,7 @@ namespace ant {
                 if (device)
                 {
                     std::ostringstream oss;
-                    // CSV: page,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,flags,gpsLost,commsLost,lowBattery,text
+                    // CSV: page,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove[,flags,text]
                     oss << (pageName ? pageName : "") << ","
                         << '"' << (!device->name.fName.empty() ? device->name.fName : device->name.uName) << '"' << ","
                         << static_cast<int>(device->index) << ","
@@ -736,11 +747,12 @@ namespace ant {
                         << device->distance << ","
                         << std::fixed << std::setprecision(1) << device->headingDegrees << ","
                         << '"' << toAssetSituationString(device->situation) << '"' << ","
-                        << "0x" << toHexByte(device->ext.flags) << ","
                         << (device->gpsLost ? 1 : 0) << ","
                         << (device->commsLost ? 1 : 0) << ","
-                        << (device->lowBattery ? 1 : 0);
+                        << (device->lowBattery ? 1 : 0) << ","
+                        << (device->remove ? 1 : 0);
                     if (logLevel <= LogLevel::Info) {
+                        oss << ",0x" << toHexByte(device->ext.flags);
                         oss << "," <<  '"' << text << '"';
                     }
                     std::cout << oss.str() << std::endl;
@@ -1174,17 +1186,16 @@ namespace ant {
         }
         oss << "m @ " << std::fixed << std::setprecision(1) << device.headingDegrees << "°";
 
-        // Find known (upper) name
-        auto& uNames = knownNames[knownKey];
-        if (const auto name = uNames[device.index]; (!name.uName.empty() || name.fName.empty())) {
+        if (const auto name = knownDevices[knownKey][device.index].name; (!name.uName.empty() || name.fName.empty())) {
             if (!name.fName.empty()) oss << " | " << name.fName.length();
             else if(!name.uName.empty()) oss << " | " << name.uName.length();
         }
 
         if (device.gpsLost)     oss << " | GPS Lost"; else oss << " | GPS OK";
         if (device.commsLost)   oss << " | Comms Lost"; else oss << " | Comms OK";
-        if (device.remove)      oss << " | Remove"; else oss << " | Keep";
         if (device.lowBattery)  oss << " | Battery Low"; else oss << " | Battery OK";
+        if (device.remove)      oss << " | Remove"; else oss << " | Keep";
+
         oss << " | " << toAssetSituationString(device.situation)
             << " | Flags: 0x" << toHexByte(device.ext.flags);
         if (isDeviceChannelIdExt(data)){
