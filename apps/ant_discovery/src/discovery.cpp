@@ -102,15 +102,12 @@ namespace ant {
 
     // Enum for situation field in status byte
     enum class AssetSituation {
+        Sitting = 0,
+        Moving = 1,
+        Pointed = 2,
+        Treed = 3,
+        Unknown = 4,
         Undefined = 255,
-        Unknown = 0,
-        OnPoint = 1,
-        Treeing = 2,
-        Running = 3,
-        Caught = 4,
-        Barking = 5,
-        Training = 6,
-        Hunting = 7
     };
 
     struct RxTimestampInfo {
@@ -512,16 +509,13 @@ namespace ant {
 
     std::string toAssetSituationString(const AssetSituation s) {
         switch (s) {
-        case AssetSituation::Undefined: return "Undefined";
-        case AssetSituation::Unknown:   return "Unknown";
-        case AssetSituation::OnPoint:   return "On Point";
-        case AssetSituation::Treeing:   return "Treeing";
-        case AssetSituation::Running:   return "Running";
-        case AssetSituation::Caught:    return "Caught";
-        case AssetSituation::Barking:   return "Barking";
-        case AssetSituation::Training:  return "Training";
-        case AssetSituation::Hunting:   return "Hunting";
-        default:                        return "Invalid";
+            case AssetSituation::Undefined: return "Undefined";
+            case AssetSituation::Unknown:   return "Unknown";
+            case AssetSituation::Pointed:   return "On Point";
+            case AssetSituation::Treed:     return "Treed";
+            case AssetSituation::Moving:    return "Moving";
+            case AssetSituation::Sitting:    return "Sitting";
+            default:                        return "Invalid";
         }
     }
 
@@ -699,21 +693,21 @@ namespace ant {
                 oss << "{";
                 bool needComma = false;
                 if(pageName) {
-                    oss << "\"page\":\"" << pageName << "\"";
+                    oss << R"("page":")" << pageName << "\"";
                     needComma = true;
                 }
                 if(device) {
                     if (needComma) oss << ",";
                     oss << "\"index\":" << static_cast<int>(device->index) << ",";
-                    oss << "\"type\":\"0x" << toHexByte(device->ext.deviceId.dType) << "\",";
-                    oss << "\"id\":\"0x" << toHexByte(device->ext.deviceId.number) << "\",";
-                    oss << "\"name\":\"" << jsonEscape(device->name.fName.length() ? device->name.fName : device->name.uName) << "\",";
+                    oss << R"("type":"0x)" << toHexByte(device->ext.deviceId.dType) << "\",";
+                    oss << R"("id":"0x)" << toHexByte(device->ext.deviceId.number) << "\",";
+                    oss << R"("name":")" << jsonEscape(!device->name.fName.empty() ? device->name.fName : device->name.uName) << "\",";
                     oss << "\"lat\":" << device->lat << ",";
                     oss << "\"lon\":" << device->lon << ",";
                     oss << "\"distance\":" << device->distance << ",";
                     oss << "\"heading\":" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
-                    oss << "\"situation\":\"" << toAssetSituationString(device->situation) << "\",";
-                    oss << "\"flags\":\"0x" << toHexByte(device->ext.flags) << "\",";
+                    oss << R"("situation":")" << toAssetSituationString(device->situation) << "\",";
+                    oss << R"("flags":"0x)" << toHexByte(device->ext.flags) << "\",";
                     oss << "\"gpsLost\":" << (device->gpsLost ? "true" : "false") << ",";
                     oss << "\"commsLost\":" << (device->commsLost ? "true" : "false") << ",";
                     oss << "\"lowBattery\":" << (device->lowBattery ? "true" : "false") << ",";
@@ -721,18 +715,19 @@ namespace ant {
                 }
                 if (needComma) oss << ",";
                 if (logLevel <= LogLevel::Info) {
-                    oss << "\"text\":\"" << jsonEscape(text) << "\"";
+                    oss << R"("text":")" << jsonEscape(text) << "\"";
                 }
                 oss << "}";
                 std::cout << oss.str() << std::endl;
                 break;
             }
             case OutputFormat::CSV: {
-                if(device) {
+                if (device)
+                {
                     std::ostringstream oss;
-                    // CSV: page,index,distance,heading,situation,flags,gpsLost,commsLost,lowBattery,name,text
+                    // CSV: page,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,flags,gpsLost,commsLost,lowBattery,text
                     oss << (pageName ? pageName : "") << ","
-                        << '"' << (device->name.fName.length() ? device->name.fName : device->name.uName) << '"' << ","
+                        << '"' << (!device->name.fName.empty() ? device->name.fName : device->name.uName) << '"' << ","
                         << static_cast<int>(device->index) << ","
                         << "0x" << toHexByte(device->ext.deviceId.number) << ","
                         << "0x" << toHexByte(device->ext.deviceId.dType) << ","
@@ -1182,14 +1177,14 @@ namespace ant {
         // Find known (upper) name
         auto& uNames = knownNames[knownKey];
         if (const auto name = uNames[device.index]; (!name.uName.empty() || name.fName.empty())) {
-            if (name.fName.length()) oss << " | " << name.fName.length();
-            else if(name.uName.length()) oss << " | " << name.uName.length();
+            if (!name.fName.empty()) oss << " | " << name.fName.length();
+            else if(!name.uName.empty()) oss << " | " << name.uName.length();
         }
 
-        if (device.gpsLost)     oss << " | GPS Lost";
-        if (device.commsLost)   oss << " | Comms Lost";
-        if (device.remove)      oss << " | Remove";
-        if (device.lowBattery)  oss << " | Battery Low";
+        if (device.gpsLost)     oss << " | GPS Lost"; else oss << " | GPS OK";
+        if (device.commsLost)   oss << " | Comms Lost"; else oss << " | Comms OK";
+        if (device.remove)      oss << " | Remove"; else oss << " | Keep";
+        if (device.lowBattery)  oss << " | Battery Low"; else oss << " | Battery OK";
         oss << " | " << toAssetSituationString(device.situation)
             << " | Flags: 0x" << toHexByte(device.ext.flags);
         if (isDeviceChannelIdExt(data)){
@@ -1308,10 +1303,10 @@ namespace ant {
         }
 
         // Uptime calculation
-        uint32_t operatingSeconds = ticks * (twoSecondResolution ? 2 : 16);
+        const uint32_t operatingSeconds = ticks * (twoSecondResolution ? 2 : 16);
 
         const int hours = operatingSeconds / 3600;
-        const int minutes = (operatingSeconds % 3600) / 60;
+        const int minutes = operatingSeconds % 3600 / 60;
         const int seconds = operatingSeconds % 60;
 
         oss << " | Uptime: ";

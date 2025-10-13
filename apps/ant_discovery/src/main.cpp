@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
 
     // Default to false/Info unless overridden by -v/--verbose
     auto verbose = false;
-    constexpr auto logLevel = ant::LogLevel::Info;
+    auto logLevel = ant::LogLevel::Info;
 
     // Default to text unless overridden by -f/--format
     auto outputFormat = ant::OutputFormat::Text;
@@ -128,9 +128,13 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        ant::setLogLevel(verbose || outputFormat == ant::OutputFormat::Text
-            ? logLevel : ant::LogLevel::None
-        );
+        if (verbose && outputFormat == ant::OutputFormat::Text){
+            logLevel = ant::LogLevel::Fine;
+        } else{
+            logLevel = ant::LogLevel::None;
+        }
+
+        ant::setLogLevel(logLevel);
         ant::setFormat(outputFormat);
 
         if (!ant::initialize(*devList[deviceNumber], deviceNumber)) {
