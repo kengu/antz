@@ -4,6 +4,24 @@
 #include <usb_device_handle.hpp>
 
 namespace ant {
+
+    enum class LogLevel {
+        Fine,
+        Info,
+        Warn,
+        Error,
+        None
+    };
+
+    // ===== Output format support (Text / JSON / CSV) =====
+    enum class OutputFormat {
+        Text,
+        JSON,
+        CSV
+    };
+
+    void setFormat(OutputFormat fmt);
+    void setLogLevel(LogLevel level);
     bool initialize(const USBDevice& pDevice, UCHAR ucDeviceNumber);
     bool startDiscovery();
     void runEventLoop();

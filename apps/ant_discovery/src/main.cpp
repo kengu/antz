@@ -28,63 +28,110 @@ void print_stacktrace() {
 static void onSignal(int) {
     std::cout << "CTRL+C detected, cleanup..." << std::endl;
     ant::cleanup();
-    std::exit(0);
+    ::_exit(0);
 }
 
-int main() {
+int main(int argc, char** argv) {
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
+
+    // Default to 0 unless overridden by -d/--device
+    UCHAR  deviceNumber = 0;
+    auto deviceNotGiven = true;
+
+    // Default to false/Info unless overridden by -v/--verbose
+    auto verbose = false;
+    constexpr auto logLevel = ant::LogLevel::Info;
+
+    // Default to text unless overridden by -f/--format
+    auto outputFormat = ant::OutputFormat::Text;
+
+    // Simple CLI arg parsing
+    for (int i = 1; i < argc; ++i) {
+        if (std::string arg = argv[i]; (arg == "-f" || arg == "--format") && i + 1 < argc) {
+            std::string fmt = argv[++i];
+            std::ranges::transform(
+                fmt,
+                fmt.begin(),
+                [](const unsigned char c){ return std::tolower(c); }
+            );
+            if (fmt == "json")      outputFormat = ant::OutputFormat::JSON;
+            else if (fmt == "csv")  outputFormat = ant::OutputFormat::CSV;
+            else if (fmt == "text") outputFormat = ant::OutputFormat::Text;
+            else {
+                std::cerr << "Unknown format: " << fmt
+                          << " (expected text, json, or csv)" << std::endl;
+                return 1;
+            }
+        }
+        else if (arg == "-v" || arg == "--verbose") {
+            verbose = true;
+        }
+        else if (arg == "-d" || arg == "--device") {
+            deviceNumber = static_cast<UCHAR>(std::stoul(argv[++i]));
+            deviceNotGiven = false;
+        }
+        else if (arg == "-h" || arg == "--help") {
+            std::cout << "Usage: " << argv[0] << " [-f|--format text|json|csv] [-v|--verbose]\n";
+            return 0;
+        }
+    }
+
     try {
 
-        if (!check_usb_is_available())
-        {
+        if (!check_usb_is_available()) {
             std::cout << "USB is not available." << std::endl;
             return 1;
         }
 
+
         // Get all ANT devices (detected via USB)
         const ANTDeviceList devList = USBDeviceHandle::GetAllDevices();
-        if (devList.GetSize() == 0)
-        {
+        if (devList.GetSize() == 0) {
             std::cerr << "No ANT devices found!" << std::endl;
             return 1;
         }
 
-        std::cout << "Number of ANT devices found: " << devList.GetSize() << std::endl;
-        for (unsigned int i = 0; i < devList.GetSize(); ++i) {
-            const USBDevice& dev = *devList[i];
-            std::cout << "[" << i << "]: Vendor ID: 0x" << std::hex << dev.GetVid()
-                      << ", Product ID: 0x" << std::hex << dev.GetPid() << std::dec;
+        if (deviceNotGiven) {
+            std::cout << "Number of ANT devices found: " << devList.GetSize() << std::endl;
+            for (unsigned int i = 0; i < devList.GetSize(); ++i) {
+                const USBDevice& dev = *devList[i];
+                std::cout << "[" << i << "]: Vendor ID: 0x" << std::hex << dev.GetVid()
+                          << ", Product ID: 0x" << std::hex << dev.GetPid() << std::dec;
 
-            // Serial string
-            UCHAR serialBuf[128] = {0};
-            if (dev.GetSerialString(serialBuf, sizeof(serialBuf) - 1)) {
-                std::cout << ", Serial: " << serialBuf;
+                // Serial string
+                UCHAR serialBuf[128] = {0};
+                if (dev.GetSerialString(serialBuf, sizeof(serialBuf) - 1)) {
+                    std::cout << ", Serial: " << serialBuf;
+                }
+
+                // Product description
+                UCHAR prodBuf[128] = {0};
+                if (dev.GetProductDescription(prodBuf, sizeof(prodBuf) - 1)) {
+                    std::cout << ", Product: " << prodBuf;
+                }
+                std::cout << std::endl;
             }
 
-            // Product description
-            UCHAR prodBuf[128] = {0};
-            if (dev.GetProductDescription(prodBuf, sizeof(prodBuf) - 1)) {
-                std::cout << ", Product: " << prodBuf;
-            }
-            std::cout << std::endl;
+            if (deviceNumber == 0xFF) {
+                std::cout << "USB Device number? " << std::flush;
+                std::string line;
+                std::getline(std::cin, line);
+                deviceNumber = line.empty() ? deviceNumber : static_cast<UCHAR>(std::stoul(line));
 
+                std::cout << "USB Device [" << static_cast<unsigned int>(deviceNumber) << "]" << std::endl;
+            }
         }
 
-        UCHAR deviceNumber = 0xFF;
-        if (deviceNumber == 0xFF) {
-            std::cout << "USB Device number? " << std::flush;
-            std::string line;
-            std::getline(std::cin, line);
-            deviceNumber = line.empty() ? 0 : static_cast<UCHAR>(std::stoul(line));
-            if (deviceNumber >= devList.GetSize())
-            {
-                std::cerr << "USB Device ["+ std::to_string(deviceNumber) + "] not found " << std::endl;
-                return 1;
-            }
-
-            std::cout << "USB Device [" << static_cast<unsigned int>(deviceNumber) << "]" << std::endl;
+        if (deviceNumber >= devList.GetSize()){
+            std::cerr << "USB Device ["+ std::to_string(deviceNumber) + "] not found " << std::endl;
+            return 1;
         }
+
+        ant::setFormat(outputFormat);
+        ant::setLogLevel(verbose || outputFormat == ant::OutputFormat::Text
+            ? logLevel : ant::LogLevel::None
+        );
 
         if (!ant::initialize(*devList[deviceNumber], deviceNumber)) {
             std::cerr << "ANT initialization failed." << std::endl;
@@ -111,6 +158,7 @@ int main() {
         return 1;
     }
 }
+
 
 /*
 

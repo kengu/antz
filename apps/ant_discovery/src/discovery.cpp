@@ -1,7 +1,4 @@
-#include "types.h"
-#include "dsi_framer_ant.hpp"
-#include "dsi_serial_generic.hpp"
-#include "ant.h"
+#include "discovery.hpp"
 
 #include <iostream>
 #include <thread>
@@ -12,10 +9,17 @@
 #include <string>
 #include <map>
 #include <unordered_set>
+#include <sstream>
 
-#include "asset_tracker_discovery.h"
+#include "ant.h"
+#include "types.h"
 #include "dsi_debug.hpp"
+#include "dsi_framer_ant.hpp"
+#include "dsi_serial_generic.hpp"
+
 #include "hrm_discovery.h"
+#include "asset_tracker_discovery.h"
+#include "../../../libs/antz_core/src/logger/antz_logger.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -24,13 +28,6 @@
 constexpr UCHAR USER_CHANNEL_ASSET = 1;
 
 namespace ant {
-
-    enum class LogLevel {
-        Fine,
-        Info,
-        Warn,
-        Error
-    };
 
     struct Channel {
         bool use = true;
@@ -46,7 +43,7 @@ namespace ant {
 
     std::vector<Channel> channels = {
         {false, 0x00,  0x00, 0x00, 0x78, 0x00, 8070, 57, 0x012},  // HMR search
-        {true, 0x01,  0x00, 0x2BB3, 0x78, 0x51, 8070, 57, 0x012},   // Paired HRM
+        {false, 0x01,  0x00, 0x2BB3, 0x78, 0x51, 8070, 57, 0x012},   // Paired HRM
         // -----------------------------------------------------------------------------
         // ANT+ Asset Tracker – Pairing Mode
         //
@@ -79,7 +76,7 @@ namespace ant {
         // ANT+ Asset Tracker Device Profile, Rev 1.0 – Section 6: Device Pairing
         // -----------------------------------------------------------------------------
         {false, 2,  0x00, 0x00, 0x29, 0x00, 2048, 57, 0x03},    // Asset search
-        {true, 3,  0x00, 0x024A, 0x29, 0xD5, 2048, 57, 0x06},   // Paired Alpha 10
+        {false, 3,  0x00, 0x024A, 0x29, 0xD5, 2048, 57, 0x06},   // Paired Alpha 10
         {true, 4,  0x00, 0x7986, 0x29, 0x65, 2048, 57, 0x03},  // Paired Astro 320
     };
 
@@ -95,7 +92,7 @@ namespace ant {
         AssetTracker,
     };
 
-    std::string toString(const AntProfile s) {
+    std::string toAntProfileString(const AntProfile s) {
         switch (s) {
         case AntProfile::Unknown: return "Unknown";
         case AntProfile::HeartRate:   return "HRM";
@@ -295,6 +292,7 @@ namespace ant {
             case LogLevel::Info:  name = "[INFO]"; break;
             case LogLevel::Warn:  name = "[WARN]"; break;
             case LogLevel::Error: name = "[ERROR]"; break;
+            case LogLevel::None: name = "[NONE]"; break;
         }
 
         const auto now = std::chrono::system_clock::now();
@@ -321,6 +319,8 @@ namespace ant {
     void error(const std::string& message) {
         log(LogLevel::Error, message);
     }
+
+    static auto outputFormat = OutputFormat::Text;   // default
 
     std::string toHex(const uint8_t* d, const uint8_t length) {
         std::ostringstream oss;
@@ -508,7 +508,7 @@ namespace ant {
         return static_cast<AssetSituation>((statusByte >> 5) & 0x07);
     }
 
-    std::string toString(const AssetSituation s) {
+    std::string toAssetSituationString(const AssetSituation s) {
         switch (s) {
         case AssetSituation::Undefined: return "Undefined";
         case AssetSituation::Unknown:   return "Unknown";
@@ -654,6 +654,104 @@ namespace ant {
 
         fine(oss.str());
 
+    }
+
+    // Utility: escape string for JSON
+    std::string jsonEscape(const std::string& input) {
+        std::ostringstream oss;
+        for (const auto& c : input) {
+            switch (c) {
+                case '"':  oss << "\\\""; break;
+                case '\\': oss << "\\\\"; break;
+                case '\b': oss << "\\b";  break;
+                case '\f': oss << "\\f";  break;
+                case '\n': oss << "\\n";  break;
+                case '\r': oss << "\\r";  break;
+                case '\t': oss << "\\t";  break;
+                default:
+                    if (static_cast<unsigned char>(c) <= 0x1F) {
+                        oss << "\\u"
+                            << std::hex << std::setw(4) << std::setfill('0') << int(static_cast<unsigned char>(c));
+                    } else {
+                        oss << c;
+                    }
+            }
+        }
+        return oss.str();
+    }
+
+    // Centralized output function
+    void output(const std::string &text,
+                const Device* device = nullptr,
+                const char* pageName = nullptr)
+    {
+        switch (outputFormat)
+        {
+            case OutputFormat::Text: {
+                info(text);
+                break;
+            }
+            case OutputFormat::JSON: {
+                std::ostringstream oss;
+                oss << "{";
+                bool needComma = false;
+                if(pageName) {
+                    oss << "\"page\":\"" << pageName << "\"";
+                    needComma = true;
+                }
+                if(device) {
+                    if (needComma) oss << ",";
+                    oss << "\"index\":" << static_cast<int>(device->index) << ",";
+                    oss << "\"distance\":" << device->distance << ",";
+                    oss << "\"heading\":" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
+                    oss << "\"situation\":\"" << toAssetSituationString(device->situation) << "\",";
+                    oss << "\"flags\":" << static_cast<int>(device->ext.flags) << ",";
+                    oss << "\"gpsLost\":" << (device->gpsLost ? "true" : "false") << ",";
+                    oss << "\"commsLost\":" << (device->commsLost ? "true" : "false") << ",";
+                    oss << "\"lowBattery\":" << (device->lowBattery ? "true" : "false") << ",";
+                    oss << "\"name\":\"" << jsonEscape(device->fName) << "\"";
+                    needComma = true;
+                }
+                if (needComma) oss << ",";
+                oss << "\"text\":\"" << jsonEscape(text) << "\"";
+                oss << "}";
+                std::cout << oss.str() << std::endl;
+                break;
+            }
+            case OutputFormat::CSV: {
+                if(device) {
+                    std::ostringstream oss;
+                    // CSV: page,index,distance,heading,situation,flags,gpsLost,commsLost,lowBattery,name,text
+                    oss << (pageName ? pageName : "") << ","
+                        << static_cast<int>(device->index) << ","
+                        << device->distance << ","
+                        << std::fixed << std::setprecision(1) << device->headingDegrees << ","
+                        << '"' << toAssetSituationString(device->situation) << '"' << ","
+                        << static_cast<int>(device->ext.flags) << ","
+                        << (device->gpsLost ? 1 : 0) << ","
+                        << (device->commsLost ? 1 : 0) << ","
+                        << (device->lowBattery ? 1 : 0) << ","
+                        << '"' << device->fName << '"' << ","
+                        << '"' << text << '"';
+                    std::cout << oss.str() << std::endl;
+                } else {
+                    std::cout
+                        << (pageName ? pageName : "") << ",,,,,,,,"
+                        << "\"\",\"" << text << "\"" << std::endl;
+                }
+                break;
+            }
+        }
+    }
+
+    // Allow choosing verbosity of logging
+    void setLogLevel(const LogLevel level)  {
+        logLevel = level;
+    }
+
+    // Allow choosing output format via programmatic setter only
+    void setFormat(const OutputFormat fmt) {
+        outputFormat = fmt;
     }
 
     bool initialize(const USBDevice& pDevice, const UCHAR ucDeviceNumber) {
@@ -952,7 +1050,7 @@ namespace ant {
             << " | Manufacturer: " << lookupManufacturer(id) << " (" << id << ")"
             << " | Model: " << lookupModelName(id, number) << " (" << number << ")";
 
-        info(oss.str());
+        output(oss.str(), nullptr, "ManufacturerInfo");
     }
 
     double parseSwVersion(const uint8_t supplemental, const uint8_t main) {
@@ -978,7 +1076,7 @@ namespace ant {
             << "[ASSET/81] Product Info"
             << " | SW Revision "<< std::fixed << std::setprecision(3) << swVersion
             << " | Serial #" << serial;
-        info(oss.str());
+        output(oss.str(), nullptr, "ProductInfo");
     }
 
     void handleNoAssetsPage(const uint8_t* data, const uint8_t length) {
@@ -996,7 +1094,7 @@ namespace ant {
             if (isDeviceChannelIdExt(data)) {
                 oss << " | "<< formatDeviceChannelID(device.ext);
             }
-            info(oss.str());
+            output(oss.str(), &device, "NoAssets");
 
             // Remove all existing indexes
             const auto knownKey = makeDeviceKey(device);
@@ -1008,7 +1106,7 @@ namespace ant {
 
         oss << "Handler not found for Page 0x" << toHexByte(data[0])
             << " | Raw Payload (" << std::dec << static_cast<int>(length) << "): " << toHex(data, length);
-        severe(oss.str());
+        error(oss.str());
     }
 
 
@@ -1072,12 +1170,12 @@ namespace ant {
         if (device.commsLost)   oss << " | Comms Lost";
         if (device.remove)      oss << " | Remove";
         if (device.lowBattery)  oss << " | Battery Low";
-        oss << " | " << toString(device.situation)
+        oss << " | " << toAssetSituationString(device.situation)
             << " | Flags: 0x" << toHexByte(device.ext.flags);
         if (isDeviceChannelIdExt(data)){
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
-        info(oss.str());
+        output(oss.str(), &device, "LocationPage1");
 
         auto& assets = knownIndexes[knownKey];
         if (assets.insert(device.index).second) {
@@ -1101,7 +1199,7 @@ namespace ant {
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
 
-        info(oss.str());
+        output(oss.str(), &device, "LocationPage2");
     }
 
     // Broadcast message format:
@@ -1125,7 +1223,7 @@ namespace ant {
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
 
-        info(oss.str());
+        output(oss.str(), &device, "Identification1");
     }
 
     // Broadcast message format:
@@ -1148,7 +1246,7 @@ namespace ant {
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
 
-        info(oss.str());
+        output(oss.str(), &device, "Identification2");
     }
 
     void handleBatteryStatusPage(const uint8_t* data) {
@@ -1201,7 +1299,7 @@ namespace ant {
         if (minutes > 0 || hours > 0) oss << minutes << "m ";
         oss << seconds << "s";
 
-        info(oss.str());
+        output(oss.str(), nullptr, "BatteryStatus");
     }
 
     void handleDisconnectPage(const uint8_t* data, const uint8_t length) {
@@ -1240,7 +1338,7 @@ namespace ant {
         }
         oss << " | " << "Raw Payload (" << std::dec << static_cast<int>(length) << "): " << toHex(data, length);
 
-        info(oss.str());
+        output(oss.str(), &device, "UnknownPage");
 
         requestAssetPages(channel, device);
 
@@ -1329,7 +1427,7 @@ namespace ant {
             oss << " | " << formatRssi(ext);
         }
 
-        info(oss.str());
+        output(oss.str(), nullptr, "HRM");
 
     }
 
