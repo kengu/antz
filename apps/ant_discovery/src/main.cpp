@@ -71,8 +71,17 @@ int main(int argc, char** argv) {
             deviceNumber = static_cast<UCHAR>(std::stoul(argv[++i]));
             deviceNotGiven = false;
         }
+        else if (arg == "-e") {
+            try {
+                const double meters = std::stod(argv[++i]);
+                ant::setEpsLatLng(meters);
+            } catch (const std::exception& _) {
+                std::cerr << "Invalid value for " << arg << ": " << argv[i] << "\n";
+                return 2;
+            }
+        }
         else if (arg == "-h" || arg == "--help") {
-            std::cout << "Usage: " << argv[0] << " [-f|--format text|json|csv] [-v|--verbose]\n";
+            std::cout << "Usage: " << argv[0] << " [-f|--format text|json|csv] [-e <meters>] [-v|--verbose]\n";
             return 0;
         }
     }
@@ -128,7 +137,7 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        if (verbose){
+        if (verbose) {
             logLevel = outputFormat == ant::OutputFormat::Text
                 ? ant::LogLevel::Fine
                 : ant::LogLevel::Info;

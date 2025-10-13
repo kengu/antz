@@ -26,7 +26,7 @@ inline std::string currentTimestamp() {
     return oss.str();
 }
 
-inline void log(LogLevel level, const std::string& msg) {
+inline void log(const LogLevel level, const std::string& msg) {
     const char* tag = nullptr;
     switch (level) {
         case LogLevel::INFO:   tag = "[INFO]"; break;

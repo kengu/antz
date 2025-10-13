@@ -208,6 +208,11 @@ namespace ant {
         std::string fName;
     };
 
+    struct HRM {
+        uint8_t heartRate = 0;
+        ExtendedInfo ext;
+    };
+
     struct Device {
         uint8_t index{};
         uint8_t color = 0;
@@ -233,15 +238,45 @@ namespace ant {
         ExtendedInfo ext;
     };
 
+    struct ProductInfo {
+        uint32_t serial;
+        double swVersion;
+        ExtendedInfo ext;
+        std::chrono::system_clock::time_point ts; // Host timestamp of last update
+    };
+
+    struct ManufacturerInfo {
+        uint16_t id;
+        std::string name;
+        std::string model;
+        uint16_t number;
+        int hwRevision;
+        ExtendedInfo ext;
+        std::chrono::system_clock::time_point ts; // Host timestamp of last update
+    };
+
+    struct BatteryInfo {
+        uint8_t identBatt;
+        uint8_t numOfBatt;
+        std::string status;
+        uint32_t uptime;
+        double voltage;
+        ExtendedInfo ext;
+        std::chrono::system_clock::time_point ts; // Host timestamp of last update
+    };
+
     // Converts meters to degrees latitude/longitude (approximate, valid for small distances)
     constexpr double metersToDegrees(const double meters) {
         constexpr double METERS_PER_DEGREE = 111320.0; // average Earth radius at mid-latitudes
         return meters / METERS_PER_DEGREE;
     }
 
+    static auto logLevel = LogLevel::Info;
+    static auto outputFormat = OutputFormat::Text;
+
     // Epsilon constants for approximate comparisons
-    inline constexpr double HEADING_EPS = 0.1;   // degrees
-    inline constexpr double LATLON_EPS = metersToDegrees(1.0); // degrees (≈ 1 m)
+    static auto epsHeading = 0.1;
+    static auto epsLatLng = metersToDegrees(1.0);
 
     inline bool operator==(const NameInfo& a, const NameInfo& b) {
         return a.uName == b.uName &&
@@ -253,9 +288,9 @@ namespace ant {
         // Note: we intentionally ignore 'ts', and 'ext'
         // for change detection to avoid spurious output
         // gating on non-state/diagnostic fields.
-        const bool headingEqual = std::fabs(lhs.headingDegrees - rhs.headingDegrees) < HEADING_EPS;
-        const bool latEqual = std::fabs(lhs.lat - rhs.lat) <= LATLON_EPS;
-        const bool lonEqual = std::fabs(lhs.lon - rhs.lon) <= LATLON_EPS;
+        const bool headingEqual = std::fabs(lhs.headingDegrees - rhs.headingDegrees) < epsHeading;
+        const bool latEqual = std::fabs(lhs.lat - rhs.lat) <= epsLatLng;
+        const bool lonEqual = std::fabs(lhs.lon - rhs.lon) <= epsLatLng;
 
         return lhs.index     == rhs.index               &&
                lhs.name      == rhs.name                &&
@@ -303,43 +338,17 @@ namespace ant {
         {1, "Garmin"},
     };
 
-    std::string lookupManufacturer(const uint16_t id) {
-        const auto it = manufacturerMap.find(id);
-        return it != manufacturerMap.end() ? it->second : "?";
-    }
-
-    static const std::map<uint16_t, std::map<uint16_t, std::string>> modelsMap = {
-        {1, {
-            {3528, "Alpha 10"},
-            {1339, "Astro 320"},
-        }},
-    };
-
-    std::string lookupModelName(const uint16_t id, const uint16_t number)
-    {
-        const auto outer = modelsMap.find(id);
-        if (outer != modelsMap.end()) {
-            const auto inner = outer->second.find(number);
-            if (inner != outer->second.end()) {
-                return inner->second;
-            }
-            return "?";
-        }
-        return "?";
-    }
-
-    static auto logLevel = LogLevel::Info;
 
     void log(const LogLevel level, const std::string& message) {
         if (level < logLevel) return;
 
         auto name = "";
         switch (level) {
-            case LogLevel::Fine:  name = "[FINE]"; break;
-            case LogLevel::Info:  name = "[INFO]"; break;
-            case LogLevel::Warn:  name = "[WARN]"; break;
-            case LogLevel::Error: name = "[ERROR]"; break;
-            case LogLevel::None: name = "[NONE]"; break;
+        case LogLevel::Fine:  name = "[FINE]"; break;
+        case LogLevel::Info:  name = "[INFO]"; break;
+        case LogLevel::Warn:  name = "[WARN]"; break;
+        case LogLevel::Error: name = "[ERROR]"; break;
+        case LogLevel::None: name = "[NONE]"; break;
         }
 
         const auto now = std::chrono::system_clock::now();
@@ -367,7 +376,52 @@ namespace ant {
         log(LogLevel::Error, message);
     }
 
-    static auto outputFormat = OutputFormat::Text;   // default
+
+    // Allow choosing verbosity of logging
+    void setLogLevel(const LogLevel level)  {
+        logLevel = level;
+        fine("Setting log level to " + std::to_string(static_cast<int>(level)));
+    }
+
+    // Allow choosing output format via programmatic setter only
+    void setFormat(const OutputFormat fmt) {
+        outputFormat = fmt;
+        fine("Setting output format to " + std::to_string(static_cast<int>(fmt)));
+    }
+
+    void setEpsLatLng(const double meters) {
+        epsLatLng = metersToDegrees(meters);
+    }
+
+    void setEpsHeading(const double degrees) {
+        epsHeading= degrees;
+    }
+
+    std::string lookupManufacturer(const uint16_t id) {
+        const auto it = manufacturerMap.find(id);
+        return it != manufacturerMap.end() ? it->second : "?";
+    }
+
+    static const std::map<uint16_t, std::map<uint16_t, std::string>> modelsMap = {
+        {1, {
+            {3528, "Alpha 10"},
+            {1339, "Astro 320"},
+        }},
+    };
+
+    std::string lookupModelName(const uint16_t id, const uint16_t number)
+    {
+        const auto outer = modelsMap.find(id);
+        if (outer != modelsMap.end()) {
+            const auto inner = outer->second.find(number);
+            if (inner != outer->second.end()) {
+                return inner->second;
+            }
+            return "?";
+        }
+        return "?";
+    }
+
 
     std::string toHex(const uint8_t* d, const uint8_t length) {
         std::ostringstream oss;
@@ -739,19 +793,179 @@ namespace ant {
         return {tsBuf};
     }
 
-    // Centralized output function
-    void output(const std::string &text,
-                const Device* device = nullptr,
-                const char* pageName = nullptr,
-                double age = -1.0)
-    {
+    // Centralized Product output function
+    void output(
+        const char* pageName,
+        const std::string &text
+    ){
+        switch (outputFormat)
+        {
+            case OutputFormat::Text: {
+                info(text);
+                break;
+            }
+            case OutputFormat::JSON: {
+                std::cout << "{"
+                    << R"("page":")" << pageName << "\"," << text << "}" << std::endl;
+                break;
+            }
+            case OutputFormat::CSV: {
+                std::cout << pageName << "," << text << std::endl;
+                break;
+            }
+        }
+    }
+
+    // Centralized Product output function
+    void outputProduct(
+        const char* pageName,
+        const ProductInfo* product,
+        const std::string &text
+    ){
+        switch (outputFormat)
+        {
+            case OutputFormat::Text: {
+                output(pageName, text);
+                break;
+            }
+            case OutputFormat::JSON: {
+                std::ostringstream oss;
+                oss << R"("ts":")" << formatTimestamp(product->ts) << "\",";
+                oss << R"("deviceId":"0x)" << toHexByte(product->ext.deviceId.number) << "\",";
+                oss << R"("deviceType":"0x)" << toHexByte(product->ext.deviceId.dType) << "\",";
+                oss << R"("serial":")" << product->serial << "\",";
+                oss << R"("swVersion":")" << std::fixed << std::setprecision(3) << product->swVersion << "\"";
+                if (logLevel <= LogLevel::Info) {
+                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
+                }
+                output(pageName, oss.str());
+                break;
+            }
+            case OutputFormat::CSV: {
+                // CSV: page,ts,serial,swVersion[,text]
+                std::ostringstream oss;
+                    oss << '"' << formatTimestamp(product->ts) << '"' << ","
+                        << "0x" << toHexByte(product->ext.deviceId.number) << ","
+                        << "0x" << toHexByte(product->ext.deviceId.dType) << ","
+                        << product->serial << ","
+                        << std::fixed << std::setprecision(3) << product->swVersion;
+                if (logLevel <= LogLevel::Info) {
+                    oss << "," <<  '"' << text << '"';
+                }
+                output(pageName, oss.str());
+                break;
+            }
+        }
+    }
+
+    // Centralized Product output function
+    void outputManufacturer(
+        const char* pageName,
+        const ManufacturerInfo* mfi,
+        const std::string &text
+    ){
+        switch (outputFormat)
+        {
+        case OutputFormat::Text: {
+                output(pageName, text);
+                break;
+        }
+        case OutputFormat::JSON: {
+                std::ostringstream oss;
+                oss << R"("ts":")" << formatTimestamp(mfi->ts) << "\",";
+                oss << R"("deviceId":"0x)" << toHexByte(mfi->ext.deviceId.number) << "\",";
+                oss << R"("deviceType":"0x)" << toHexByte(mfi->ext.deviceId.dType) << "\",";
+                oss << R"("manufacturerId":)" << mfi->id << ",";
+                oss << R"("manufacturerName":")" << mfi->name << "\",";
+                oss << R"("modelName":")" << mfi->model << "\",";
+                oss << R"("modelNumber":)" << mfi->id << ",";
+                oss << R"("hwRevision":")" << std::fixed << std::setprecision(3) << mfi->hwRevision << "\"";
+                if (logLevel <= LogLevel::Info) {
+                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
+                }
+                output(pageName, oss.str());
+                break;
+        }
+        case OutputFormat::CSV: {
+                // CSV: page,ts,deviceId,deviceType,manufacturerId,manufacturerName,modelName,ModelNumber,hwRevision[,text]
+                std::ostringstream oss;
+                oss << '"' << formatTimestamp(mfi->ts) << '"' << ","
+                    << "0x" << toHexByte(mfi->ext.deviceId.number) << ","
+                    << "0x" << toHexByte(mfi->ext.deviceId.dType) << ","
+                    << mfi->id << ","
+                    << '"' << mfi->name << '"' << ","
+                    << '"' << mfi->model << '"' << ","
+                    << mfi->number << ","
+                    << std::fixed << std::setprecision(3) << mfi->hwRevision;
+                if (logLevel <= LogLevel::Info) {
+                    oss << "," <<  '"' << text << '"';
+                }
+                output(pageName, oss.str());
+                break;
+            }
+        }
+    }
+
+    // Centralized BatteryStatus output function
+    void outputBatteryStatus(
+        const char* pageName,
+        const BatteryInfo* batt,
+        const std::string &text
+    ){
+        switch (outputFormat)
+        {
+        case OutputFormat::Text: {
+                output(pageName, text);
+                break;
+        }
+        case OutputFormat::JSON: {
+                std::ostringstream oss;
+                oss << R"("ts":")" << formatTimestamp(batt->ts) << "\",";
+                oss << R"("deviceId":"0x)" << toHexByte(batt->ext.deviceId.number) << "\",";
+                oss << R"("deviceType":"0x)" << toHexByte(batt->ext.deviceId.dType) << "\",";
+                oss << R"("batteryId":")" << batt->identBatt << "\",";
+                oss << R"("numOfBatt":")" << batt->numOfBatt << "\",";
+                oss << R"("voltage":)" << batt->voltage << ",";
+                oss << R"("uptime":)" << batt->uptime;
+                if (logLevel <= LogLevel::Info) {
+                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
+                }
+                output(pageName, oss.str());
+                break;
+        }
+        case OutputFormat::CSV: {
+                // CSV: page,ts,deviceId,deviceType,batteryId,numOfBatt,status,voltage,uptime[,text]
+                std::ostringstream oss;
+                oss << '"' << formatTimestamp(batt->ts) << '"' << ","
+                    << "0x" << toHexByte(batt->ext.deviceId.number) << ","
+                    << "0x" << toHexByte(batt->ext.deviceId.dType) << ","
+                    << static_cast<int>(batt->identBatt) << ","
+                    << static_cast<int>(batt->numOfBatt) << ","
+                    << '"' << batt->status << '"' << ","
+                    << batt->voltage << ","
+                    << batt->uptime;;
+                if (logLevel <= LogLevel::Info) {
+                    oss << "," <<  '"' << text << '"';
+                }
+                output(pageName, oss.str());
+                break;
+        }
+        }
+    }
+
+    // Centralized Device output function
+    void outputDevice(
+        const char* pageName,
+        const Device* device,
+        double age,
+        const std::string &text
+    ){
+
         // Always append age to text output for devices
         std::string finalText = text;
-        if (device) {
-            std::ostringstream tmp;
-            tmp << finalText << " | age=" << std::fixed << std::setprecision(0) << age << "s";
-            finalText = tmp.str();
-        }
+        std::ostringstream tmp;
+        tmp << finalText << " | age=" << std::fixed << std::setprecision(0) << age << "s";
+        finalText = tmp.str();
 
         switch (outputFormat)
         {
@@ -761,88 +975,135 @@ namespace ant {
             }
             case OutputFormat::JSON: {
                 std::ostringstream oss;
-                oss << "{";
-                bool needComma = false;
-                if(pageName) {
-                    oss << R"("page":")" << pageName << "\"";
-                    needComma = true;
-                }
-                if(device) {
-                    if (needComma) oss << ",";
-                    oss << R"("ts":")" << formatTimestamp(device->ts) << "\",";
-                    oss << R"("name":")" << jsonEscape(!device->name.fName.empty() ? device->name.fName : device->name.uName) << "\",";
-                    oss << R"("index":)" << static_cast<int>(device->index) << ",";
-                    oss << R"("color":"0x)" << static_cast<int>(device->color) << "\",";
-                    oss << R"("type":"0x)" << toHexByte(device->ext.deviceId.dType) << "\",";
-                    oss << R"("id":"0x)" << toHexByte(device->ext.deviceId.number) << "\",";
-                    oss << R"("lat":)" << device->lat << ",";
-                    oss << R"("long":)" << device->lon << ",";
-                    oss << R"("distance":)" << device->distance << ",";
-                    oss << R"("heading":)" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
-                    oss << R"("situation":")" << toAssetSituationString(device->situation) << "\",";
-                    oss << R"("gpsLost":)" << (device->gpsLost ? "true" : "false") << ",";
-                    oss << R"("commsLost":)" << (device->commsLost ? "true" : "false") << ",";
-                    oss << R"("lowBattery":)" << (device->lowBattery ? "true" : "false") << ",";
-                    oss << R"("remove":)" << (device->remove ? "true" : "false") << ",";
-                    oss << R"("age":)" << std::fixed << std::setprecision(0) << age;
-                    needComma = true;
-                }
+                oss << R"("ts":")" << formatTimestamp(device->ts) << "\",";
+                oss << R"("name":")" << jsonEscape(!device->name.fName.empty() ? device->name.fName : device->name.uName) << "\",";
+                oss << R"("index":)" << static_cast<int>(device->index) << ",";
+                oss << R"("color":"0x)" << static_cast<int>(device->color) << "\",";
+                oss << R"("id":"0x)" << toHexByte(device->ext.deviceId.number) << "\",";
+                oss << R"("type":"0x)" << toHexByte(device->ext.deviceId.dType) << "\",";
+                oss << R"("lat":)" << device->lat << ",";
+                oss << R"("long":)" << device->lon << ",";
+                oss << R"("distance":)" << device->distance << ",";
+                oss << R"("heading":)" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
+                oss << R"("situation":")" << toAssetSituationString(device->situation) << "\",";
+                oss << R"("gpsLost":)" << (device->gpsLost ? "true" : "false") << ",";
+                oss << R"("commsLost":)" << (device->commsLost ? "true" : "false") << ",";
+                oss << R"("lowBattery":)" << (device->lowBattery ? "true" : "false") << ",";
+                oss << R"("remove":)" << (device->remove ? "true" : "false") << ",";
+                oss << R"("age":)" << std::fixed << std::setprecision(0) << age;
                 if (logLevel <= LogLevel::Info) {
-                    if (needComma) oss << ",";
-                    if (device) oss << R"(,"flags":"0x)" << toHexByte(device->ext.flags) << "\"";
+                    oss << R"(,"flags":"0x)" << toHexByte(device->ext.flags) << "\"";
                     oss << R"(,"text":")" << jsonEscape(text) << "\"";
                 }
-                oss << "}";
-                std::cout << oss.str() << std::endl;
+                output(pageName, oss.str());
                 break;
             }
             case OutputFormat::CSV: {
-                if (device)
-                {
-                    std::ostringstream oss;
-                    // CSV: page,ts,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove,age,[flags,text]
-                    oss << (pageName ? pageName : "") << ","
-                        << '"' << formatTimestamp(device->ts) << '"' << ","
-                        << '"' << (!device->name.fName.empty() ? device->name.fName : device->name.uName) << '"' << ","
-                        << static_cast<int>(device->index) << ","
-                        << "0x" << toHexByte(device->ext.deviceId.number) << ","
-                        << "0x" << toHexByte(device->ext.deviceId.dType) << ","
-                        << device->lat << ","
-                        << device->lon << ","
-                        << device->distance << ","
-                        << std::fixed << std::setprecision(1) << device->headingDegrees << ","
-                        << '"' << toAssetSituationString(device->situation) << '"' << ","
-                        << (device->gpsLost ? 1 : 0) << ","
-                        << (device->commsLost ? 1 : 0) << ","
-                        << (device->lowBattery ? 1 : 0) << ","
-                        << (device->remove ? 1 : 0) << ","
-                        << std::fixed << std::setprecision(0) << age;
+                std::ostringstream oss;
+                // CSV: page,ts,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove,age,[flags,text]
+                oss << '"' << formatTimestamp(device->ts) << '"' << ","
+                    << '"' << (!device->name.fName.empty() ? device->name.fName : device->name.uName) << '"' << ","
+                    << static_cast<int>(device->index) << ","
+                    << "0x" << toHexByte(device->ext.deviceId.number) << ","
+                    << "0x" << toHexByte(device->ext.deviceId.dType) << ","
+                    << device->lat << ","
+                    << device->lon << ","
+                    << device->distance << ","
+                    << std::fixed << std::setprecision(1) << device->headingDegrees << ","
+                    << '"' << toAssetSituationString(device->situation) << '"' << ","
+                    << (device->gpsLost ? 1 : 0) << ","
+                    << (device->commsLost ? 1 : 0) << ","
+                    << (device->lowBattery ? 1 : 0) << ","
+                    << (device->remove ? 1 : 0) << ","
+                    << std::fixed << std::setprecision(0) << age;
 
-                    if (logLevel <= LogLevel::Info) {
-                        oss << ",0x" << toHexByte(device->ext.flags);
-                        oss << "," <<  '"' << text << '"';
-                    }
-                    std::cout << oss.str() << std::endl;
-                } else {
-                    std::ostringstream oss;
-                    // when no device, keep columns aligned; always append age at the end
-                    oss << (pageName ? pageName : "") << ","
-                        << ",,,,,,,,,,,,,,,,";
-                    if (logLevel <= LogLevel::Info) {
-                        oss << ",\"" << text << "\"";
-                    }
-                    oss << "," << std::fixed << std::setprecision(0) << age;
-                    std::cout << oss.str() << std::endl;
+                if (logLevel <= LogLevel::Info) {
+                    oss << ",0x" << toHexByte(device->ext.flags);
+                    oss << "," <<  '"' << text << '"';
                 }
+                output(pageName, oss.str());
                 break;
             }
         }
     }
 
-    void outputIfChanged(const std::string& text,
-                         const Device& device,
-                         const char* pageName)
-    {
+        // Centralized Device output function
+    void outputHRM(
+        const char* pageName,
+        const HRM* hrm,
+        const std::string &text
+    ){
+
+        switch (outputFormat)
+        {
+            case OutputFormat::Text: {
+                info(text);
+                break;
+            }
+            case OutputFormat::JSON: {
+                std::ostringstream oss;
+                oss << R"("heartRate":")" << static_cast<int>(hrm->heartRate) << ",";
+                if (logLevel <= LogLevel::Info) {
+                    oss << R"(,"flags":"0x)" << toHexByte(hrm->ext.flags) << "\"";
+                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
+                }
+                output(pageName, oss.str());
+                break;
+            }
+            case OutputFormat::CSV: {
+                std::ostringstream oss;
+                // CSV: page,heartRate,[flags,text]
+                oss << static_cast<int>(hrm->heartRate) ;
+
+                if (logLevel <= LogLevel::Info) {
+                    oss << ",0x" << toHexByte(hrm->ext.flags);
+                    oss << "," <<  '"' << text << '"';
+                }
+                output(pageName, oss.str());
+                break;
+            }
+        }
+    }
+
+    // Centralized Product output function
+    void outputGeneric(
+        const char* pageName,
+        const std::string* payload,
+        const std::string &text
+    ){
+        switch (outputFormat)
+        {
+        case OutputFormat::Text: {
+                info(text);
+                break;
+        }
+        case OutputFormat::JSON: {
+                std::ostringstream oss;
+                oss << R"("payload":")" << payload << "\"";
+                if (logLevel <= LogLevel::Info) {
+                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
+                }
+                output(pageName, oss.str());
+                break;
+        }
+        case OutputFormat::CSV: {
+                std::ostringstream oss;
+                // CSV: page,payload,[text]
+                oss << payload;
+                if (logLevel <= LogLevel::Info) {
+                    oss << "," <<  '"' << text << '"';
+                }
+                output(pageName, oss.str());
+                break;
+            }
+        }
+    }
+
+    void outputDeviceIfChanged(
+        const char* pageName,
+        const Device& device,
+        const std::string& text
+    ){
         const std::string knownKey = makeDeviceKey(device);
         const auto now = std::chrono::steady_clock::now();
 
@@ -872,19 +1133,7 @@ namespace ant {
         updatedDevice.ts = std::chrono::system_clock::now();
         devMap[device.index] = updatedDevice;
 
-        output(text, &devMap[device.index], pageName, ageSeconds);
-    }
-
-    // Allow choosing verbosity of logging
-    void setLogLevel(const LogLevel level)  {
-        logLevel = level;
-        fine("Setting log level to " + std::to_string(static_cast<int>(level)));
-    }
-
-    // Allow choosing output format via programmatic setter only
-    void setFormat(const OutputFormat fmt) {
-        outputFormat = fmt;
-        fine("Setting output format to " + std::to_string(static_cast<int>(fmt)));
+        outputDevice(pageName, &devMap[device.index], ageSeconds, text);
     }
 
     bool initialize(const USBDevice& pDevice, const UCHAR ucDeviceNumber) {
@@ -1169,12 +1418,26 @@ namespace ant {
         }
     }
 
-    void handleManufacturerInfoPage(const uint8_t* data) {
+    void handleManufacturerInfoPage(const uint8_t* data, const uint8_t length) {
         const uint8_t* payload = &data[1];
 
         const uint8_t hwRevision = payload[3];
+
         const uint16_t id = parse_u_int16_t(payload, 4);
         const uint16_t number = parse_u_int16_t(payload,6);
+
+        ExtendedInfo ext;
+        parseExtendedInfo(data, length, ext);
+
+        const ManufacturerInfo mfi = {
+            .id = id,
+            .name = lookupManufacturer(id),
+            .model = lookupModelName(id, number),
+            .number = number,
+            .hwRevision = static_cast<int>(hwRevision),
+            .ext = ext,
+            .ts = std::chrono::system_clock::now(),
+        };
 
         std::ostringstream oss;
         const uint8_t channel = data[0];
@@ -1183,7 +1446,7 @@ namespace ant {
             << " | Manufacturer: " << lookupManufacturer(id) << " (" << id << ")"
             << " | Model: " << lookupModelName(id, number) << " (" << number << ")";
 
-        output(oss.str(), nullptr, "ManufacturerInfo");
+        outputManufacturer("ManufacturerInfo", &mfi, oss.str());
     }
 
     double parseSwVersion(const uint8_t supplemental, const uint8_t main) {
@@ -1194,14 +1457,22 @@ namespace ant {
         }
     }
 
-    void handleProductInfoPage(const uint8_t* data) {
+    void handleProductInfoPage(const uint8_t* data, const uint8_t length) {
         const uint8_t* payload = &data[1];
         const uint8_t swRevision = payload[2];
         const uint8_t swMain  = payload[3];
-
         const uint32_t serial = parse_u_int32_t(payload,4);
-
         const double swVersion = parseSwVersion(swRevision, swMain);
+
+        ExtendedInfo ext;
+        parseExtendedInfo(data, length, ext);
+
+        const ProductInfo product = {
+            .serial = serial,
+            .swVersion = swVersion,
+            .ext = ext,
+            .ts = std::chrono::system_clock::now(),
+        };
 
         std::ostringstream oss;
         const uint8_t channel = data[0];
@@ -1209,7 +1480,8 @@ namespace ant {
             << "[ASSET/81] Product Info"
             << " | SW Revision "<< std::fixed << std::setprecision(3) << swVersion
             << " | Serial #" << serial;
-        output(oss.str(), nullptr, "ProductInfo");
+
+        outputProduct("ProductInfo", &product, oss.str());
     }
 
     void handleNoAssetsPage(const uint8_t* data, const uint8_t length) {
@@ -1227,7 +1499,7 @@ namespace ant {
             if (isDeviceChannelIdExt(data)) {
                 oss << " | "<< formatDeviceChannelID(device.ext);
             }
-            outputIfChanged(oss.str(), device, "NoAssets");
+            outputDeviceIfChanged("NoAssets",  device, oss.str());
 
             // Remove all existing indexes
             const auto knownKey = makeDeviceKey(device);
@@ -1307,7 +1579,7 @@ namespace ant {
         if (isDeviceChannelIdExt(data)){
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
-        outputIfChanged(oss.str(), device, "LocationPage1");
+        outputDeviceIfChanged("LocationPage1", device, oss.str());
 
         auto& assets = knownIndexes[knownKey];
         if (assets.insert(device.index).second) {
@@ -1331,7 +1603,7 @@ namespace ant {
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
 
-        outputIfChanged(oss.str(), device, "LocationPage2");
+        outputDeviceIfChanged("LocationPage2", device, oss.str());
     }
 
     // Broadcast message format:
@@ -1355,7 +1627,7 @@ namespace ant {
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
 
-        outputIfChanged(oss.str(), device, "Identification1");
+        outputDeviceIfChanged("Identification1", device, oss.str());
     }
 
     // Broadcast message format:
@@ -1378,10 +1650,21 @@ namespace ant {
             oss << " | "<< formatDeviceChannelID(device.ext);
         }
 
-        outputIfChanged(oss.str(), device, "Identification2");
+        outputDeviceIfChanged("Identification2", device, oss.str());
     }
 
-    void handleBatteryStatusPage(const uint8_t* data) {
+    std::string  toBatteryStatusString(const uint8_t batteryStatus){
+        switch (batteryStatus) {
+        case 1: return "New";
+        case 2: return "Good";
+        case 3: return "Ok";
+        case 4: return "Low";
+        case 5: return "Critical";
+        default: return "Reserved";
+        }
+    }
+
+    void handleBatteryStatusPage(const uint8_t* data, const uint8_t length) {
         const uint8_t* payload = &data[1];
         const uint8_t batteryId = payload[2];
 
@@ -1395,29 +1678,28 @@ namespace ant {
         const uint8_t batteryStatus = (descriptiveBitField >> 4) & 0x07;
         const bool twoSecondResolution = descriptiveBitField & 0x80;
 
+        const uint8_t numOfBatt  =  batteryId == 0xFF ? 0 : batteryId & 0x0F;        // Bits 0–3: Number of Batteries
+        const uint8_t identBatt  = batteryId == 0xFF ? 0 : (batteryId >> 4) & 0x0F;  // Bits 4–7: Identifier
+
         std::ostringstream oss;
         const uint8_t channel = data[0];
-        oss << "[CH] #" << std::to_string(channel) << ": "
-            << "[ASSET/82] Battery Status | Battery ID: " << static_cast<int>(batteryId) << " | ";
+        oss << "[CH] #" << std::to_string(channel) << ": [ASSET/82] Battery Status | ";
+        if (batteryId != 0xFF) {
+            oss << "Battery ID: " << identBatt << " | ";
+        }
 
         // Voltage calculation
+        double voltage = -1.0;
         if (coarseVoltage == 0x0F) {
             oss << "Voltage: Invalid | ";
         } else {
-            double voltage = coarseVoltage + fractionalVoltageRaw / 256.0;
+            voltage = coarseVoltage + fractionalVoltageRaw / 256.0;
             oss << std::fixed << std::setprecision(3) << "Voltage: " << voltage << " V | ";
         }
 
         // Battery status
-        oss << "Status: ";
-        switch (batteryStatus) {
-        case 1: oss << "New"; break;
-        case 2: oss << "Good"; break;
-        case 3: oss << "Ok"; break;
-        case 4: oss << "Low"; break;
-        case 5: oss << "Critical"; break;
-        default: oss << "Reserved"; break;
-        }
+        const std::string value = toBatteryStatusString(batteryStatus);
+        oss << "Status: " << value;
 
         // Uptime calculation
         const uint32_t operatingSeconds = ticks * (twoSecondResolution ? 2 : 16);
@@ -1431,7 +1713,24 @@ namespace ant {
         if (minutes > 0 || hours > 0) oss << minutes << "m ";
         oss << seconds << "s";
 
-        output(oss.str(), nullptr, "BatteryStatus");
+        ExtendedInfo ext;
+        parseExtendedInfo(data, length, ext);
+
+        if (ext.hasDeviceId){
+            oss << " | "<< formatDeviceChannelID(ext);
+        }
+
+        const BatteryInfo batt = {
+            .identBatt = identBatt,
+            .numOfBatt = numOfBatt,
+            .status = value,
+            .uptime = operatingSeconds,
+            .voltage = voltage,
+            .ext = ext,
+            .ts = std::chrono::system_clock::now(),
+        };
+
+        outputBatteryStatus("BatteryStatus", &batt, oss.str());
     }
 
     void handleDisconnectPage(const uint8_t* data, const uint8_t length) {
@@ -1470,19 +1769,9 @@ namespace ant {
         }
         oss << " | " << "Raw Payload (" << std::dec << static_cast<int>(length) << "): " << toHex(data, length);
 
-        outputIfChanged(oss.str(), device, "UnknownPage");
+        outputDeviceIfChanged("UnknownPage", device, oss.str());
 
         requestAssetPages(channel, device);
-
-        /*
-        try {
-            // TODO
-        } catch (const std::exception& e) {
-            std::cerr << "Exception: " << e.what() << std::endl;
-        } catch (...) {
-            std::cerr << "Unknown Exception" << std::endl;
-        }
-        */
     }
 
     // -----------------------------------------------------------------------------
@@ -1521,9 +1810,9 @@ namespace ant {
             case PAGE_LOCATION_2:         handleLocationPage2(data, length); break;
             case PAGE_IDENTIFICATION_1:   handleIdentificationPage1(data, length); break;
             case PAGE_IDENTIFICATION_2:   handleIdentificationPage2(data, length); break;
-            case PAGE_PRODUCT_INFO:       handleProductInfoPage(data); break;
-            case PAGE_BATTERY_STATUS:     handleBatteryStatusPage(data); break;
-            case PAGE_MANUFACTURER_IDENT: handleManufacturerInfoPage(data); break;
+            case PAGE_PRODUCT_INFO:       handleProductInfoPage(data, length); break;
+            case PAGE_BATTERY_STATUS:     handleBatteryStatusPage(data, length); break;
+            case PAGE_MANUFACTURER_IDENT: handleManufacturerInfoPage(data, length); break;
             case PAGE_DISCONNECT:         handleDisconnectPage(data, length); break;
             default:                      handleUnknownPage(data, length); break;
         }
@@ -1558,14 +1847,19 @@ namespace ant {
             oss << " | " << formatRssi(ext);
         }
 
-        output(oss.str(), nullptr, "HRM");
+        const HRM hrm = {
+            .heartRate = hr,
+            .ext = ext,
+        };
 
+        outputHRM(("HRMPage" + std::to_string(page)).c_str(), &hrm, oss.str());
     }
 
     void onGenericMessage(const ANT_MESSAGE& msg, const UCHAR length) {
         const uint8_t channel = msg.aucData[0];
         const std::string prefix = "[CH] #" + std::to_string(channel) + ": [GENERIC]";
-        info(prefix + " ANT+ payload: " + toHex(msg.aucData, length));
+        const std::string payload = toHex(msg.aucData, length);
+        outputGeneric("Message", &payload, prefix + " ANT+ payload: " + payload);
         requestPage(channel, PAGE_MANUFACTURER_IDENT, prefix);
         requestPage(channel, PAGE_PRODUCT_INFO, prefix);
     }

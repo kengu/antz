@@ -22,6 +22,8 @@ namespace ant {
 
     void setFormat(OutputFormat fmt);
     void setLogLevel(LogLevel level);
+    void setEpsLatLng(double meters);
+    void setEpsHeading(double degrees);
     bool initialize(const USBDevice& pDevice, UCHAR ucDeviceNumber);
     bool startDiscovery();
     void runEventLoop();
