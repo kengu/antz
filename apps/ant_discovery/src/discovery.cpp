@@ -225,12 +225,58 @@ namespace ant {
         bool remove = false;
         bool lowBattery = false;
 
+        std::chrono::system_clock::time_point ts; // Host timestamp of last update
+
         std::string batteryLevel = "?";
         std::string batteryVoltage = "?";
 
         ExtendedInfo ext;
-
     };
+
+    // Converts meters to degrees latitude/longitude (approximate, valid for small distances)
+    constexpr double metersToDegrees(const double meters) {
+        constexpr double METERS_PER_DEGREE = 111320.0; // average Earth radius at mid-latitudes
+        return meters / METERS_PER_DEGREE;
+    }
+
+    // Epsilon constants for approximate comparisons
+    inline constexpr double HEADING_EPS = 0.1;   // degrees
+    inline constexpr double LATLON_EPS = metersToDegrees(1.0); // degrees (≈ 1 m)
+
+    inline bool operator==(const NameInfo& a, const NameInfo& b) {
+        return a.uName == b.uName &&
+               a.lName == b.lName &&
+               a.fName == b.fName;
+    }
+
+    inline bool operator==(const Device& lhs, const Device& rhs) {
+        // Note: we intentionally ignore 'ts', and 'ext'
+        // for change detection to avoid spurious output
+        // gating on non-state/diagnostic fields.
+        const bool headingEqual = std::fabs(lhs.headingDegrees - rhs.headingDegrees) < HEADING_EPS;
+        const bool latEqual = std::fabs(lhs.lat - rhs.lat) <= LATLON_EPS;
+        const bool lonEqual = std::fabs(lhs.lon - rhs.lon) <= LATLON_EPS;
+
+        return lhs.index     == rhs.index               &&
+               lhs.name      == rhs.name                &&
+               lhs.color     == rhs.color               &&
+               lhs.aType     == rhs.aType               &&
+               lhs.distance  == rhs.distance            &&
+               headingEqual                             &&
+               latEqual                                 &&
+               lonEqual                                 &&
+               lhs.situation == rhs.situation           &&
+               lhs.gpsLost   == rhs.gpsLost             &&
+               lhs.commsLost == rhs.commsLost           &&
+               lhs.lowBattery== rhs.lowBattery          &&
+               lhs.remove    == rhs.remove              &&
+               lhs.batteryVoltage == rhs.batteryVoltage &&
+               lhs.batteryLevel == rhs.batteryLevel;
+    }
+
+    inline bool operator!=(const Device& lhs, const Device& rhs) {
+        return !(lhs == rhs);
+    }
 
     static DSIFramerANT *pclANT = nullptr;
     static DSISerialGeneric *pclSerial = nullptr;
@@ -245,7 +291,7 @@ namespace ant {
     static constexpr int WATCHDOG_TIMEOUT_MS = 5000;
     static constexpr int RSSI_DROP_THRESHOLD_DBM = -95;
 
-    const std::unordered_set<uint8_t> assetPages = {
+    const std::unordered_set assetPages = {
         PAGE_NO_ASSETS,
         PAGE_LOCATION_1,
         PAGE_LOCATION_2,
@@ -378,34 +424,6 @@ namespace ant {
             << ":" << static_cast<int>(d.ext.deviceId.dType)
             << ":" << static_cast<int>(d.ext.deviceId.tType);
         return oss.str();
-    }
-
-
-    bool hasDeviceChanged(const Device& prev, const Device& current) {
-        // Movement / state fields
-        if (prev.distance != current.distance) return true;
-        if (std::fabs(prev.headingDegrees - current.headingDegrees) > 0.1) return true;
-        if (prev.situation != current.situation) return true;
-        if (prev.gpsLost != current.gpsLost) return true;
-        if (prev.commsLost != current.commsLost) return true;
-        if (prev.lowBattery != current.lowBattery) return true;
-        if (prev.remove != current.remove) return true;
-
-        // Position: Location Page 2 updates lat/lon — consider it a change.
-        // Use a tiny threshold (~1e-6 deg ≈ 0.11 m) to avoid float jitter.
-        constexpr double EPS = 1e-6;
-        if (std::fabs(prev.lat - current.lat) > EPS) return true;
-        if (std::fabs(prev.lon - current.lon) > EPS) return true;
-
-        // Identity/appearance fields (Identification pages)
-        if (prev.color != current.color) return true;
-        if (prev.aType != current.aType) return true;
-        if (prev.name.uName != current.name.uName) return true;
-        if (prev.name.lName != current.name.lName) return true;
-        if (prev.name.fName != current.name.fName) return true;
-
-        // No change!
-        return false;
     }
 
     u_int16_t parse_u_int16_t(const uint8_t* data, const uint8_t offset_ = 0) {
@@ -712,6 +730,15 @@ namespace ant {
         return oss.str();
     }
 
+    // Helper to format a std::chrono::system_clock::time_point as ISO 8601 UTC string
+    std::string formatTimestamp(const std::chrono::system_clock::time_point& tp) {
+        std::time_t ts_time_t = std::chrono::system_clock::to_time_t(tp);
+        std::tm* tm_ptr = std::gmtime(&ts_time_t);
+        char tsBuf[25];
+        std::strftime(tsBuf, sizeof(tsBuf), "%FT%TZ", tm_ptr);
+        return {tsBuf};
+    }
+
     // Centralized output function
     void output(const std::string &text,
                 const Device* device = nullptr,
@@ -742,6 +769,7 @@ namespace ant {
                 }
                 if(device) {
                     if (needComma) oss << ",";
+                    oss << R"("ts":")" << formatTimestamp(device->ts) << "\",";
                     oss << R"("name":")" << jsonEscape(!device->name.fName.empty() ? device->name.fName : device->name.uName) << "\",";
                     oss << R"("index":)" << static_cast<int>(device->index) << ",";
                     oss << R"("color":"0x)" << static_cast<int>(device->color) << "\",";
@@ -772,8 +800,9 @@ namespace ant {
                 if (device)
                 {
                     std::ostringstream oss;
-                    // CSV: page,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove[,flags,text],age
+                    // CSV: page,ts,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove,age,[flags,text]
                     oss << (pageName ? pageName : "") << ","
+                        << '"' << formatTimestamp(device->ts) << '"' << ","
                         << '"' << (!device->name.fName.empty() ? device->name.fName : device->name.uName) << '"' << ","
                         << static_cast<int>(device->index) << ","
                         << "0x" << toHexByte(device->ext.deviceId.number) << ","
@@ -786,20 +815,19 @@ namespace ant {
                         << (device->gpsLost ? 1 : 0) << ","
                         << (device->commsLost ? 1 : 0) << ","
                         << (device->lowBattery ? 1 : 0) << ","
-                        << (device->remove ? 1 : 0);
+                        << (device->remove ? 1 : 0) << ","
+                        << std::fixed << std::setprecision(0) << age;
 
                     if (logLevel <= LogLevel::Info) {
                         oss << ",0x" << toHexByte(device->ext.flags);
                         oss << "," <<  '"' << text << '"';
                     }
-
-                    // Always include age as last column for devices
-                    oss << "," << std::fixed << std::setprecision(0) << age;
                     std::cout << oss.str() << std::endl;
                 } else {
                     std::ostringstream oss;
-                    // when no device, keep columns aligned; always append age at end
-                    oss << (pageName ? pageName : "") << ",,,,,,,,,,,";
+                    // when no device, keep columns aligned; always append age at the end
+                    oss << (pageName ? pageName : "") << ","
+                        << ",,,,,,,,,,,,,,,,";
                     if (logLevel <= LogLevel::Info) {
                         oss << ",\"" << text << "\"";
                     }
@@ -822,7 +850,7 @@ namespace ant {
         auto& devMap = knownDevices[knownKey];
         const auto prevIt = devMap.find(device.index);
         const bool firstSeen = (prevIt == devMap.end());
-        const bool changed = firstSeen ? true : hasDeviceChanged(prevIt->second, device);
+        const bool changed = firstSeen ? true : prevIt->second != device;
 
         if (!changed) return;
 
@@ -836,7 +864,13 @@ namespace ant {
 
         // Update timestamp first, then update live device state
         tsMap[device.index] = now;
-        devMap[device.index] = device;
+        Device updatedDevice = device;
+        // Preserve previous ts if available, otherwise set to now
+        if (prevIt != devMap.end()) {
+            updatedDevice.ts = prevIt->second.ts;
+        }
+        updatedDevice.ts = std::chrono::system_clock::now();
+        devMap[device.index] = updatedDevice;
 
         output(text, &devMap[device.index], pageName, ageSeconds);
     }
