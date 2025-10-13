@@ -10,7 +10,7 @@ namespace ant {
         Info,
         Warn,
         Error,
-        None
+        None = 256,
     };
 
     // ===== Output format support (Text / JSON / CSV) =====

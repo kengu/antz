@@ -19,7 +19,6 @@
 
 #include "hrm_discovery.h"
 #include "asset_tracker_discovery.h"
-#include "../../../libs/antz_core/src/logger/antz_logger.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -123,7 +122,7 @@ namespace ant {
         uint16_t value = 0;
     };
 
-    struct DeviceChannelIdInfo {
+    struct DeviceIdInfo {
         // The device number is a 16-bit field that is meant to be
         // unique for a given device type. Typically, this may be
         // correlated to the serial number of the device, or it could
@@ -193,16 +192,22 @@ namespace ant {
     struct ExtendedInfo {
         uint8_t flags = 0;
 
+        bool hasDeviceId = false;
         bool hasRxTsValue = false;
         bool hasRssiValue = false;
-        bool hasDeviceChannelId = false;
 
         RssiInfo rssi;
         RxTimestampInfo rxTs;
-        DeviceChannelIdInfo channelId;
+        DeviceIdInfo deviceId;
 
         // Length of extended info
         uint8_t length = 0;
+    };
+
+    struct NameInfo {
+        std::string uName;
+        std::string lName;
+        std::string fName;
     };
 
     struct Device {
@@ -210,10 +215,7 @@ namespace ant {
         uint8_t color = 0;
         uint8_t aType = 0;
 
-        std::string uName;
-        std::string lName;
-        std::string fName;
-
+        NameInfo name{};
         uint16_t distance = 0;
         float headingDegrees = 0.0f;
         double lat = 0.0;
@@ -237,7 +239,7 @@ namespace ant {
     static std::set<std::string> pairedDevices;
     static std::set<std::string> recentPageRequests;
     static std::map<std::string, std::set<uint8_t>> knownIndexes;
-    static std::map<std::string, std::map<uint8_t, std::string>> knownNames;
+    static std::map<std::string, std::map<uint8_t, NameInfo>> knownNames;
     static std::map<std::string, std::map<uint8_t, uint16_t>> knownLatitudes;
 
     static std::map<uint8_t, ChannelState> channelStates;
@@ -373,9 +375,9 @@ namespace ant {
 
     std::string makeDeviceKey(const Device& d) {
         std::ostringstream oss;
-        oss << d.ext.channelId.number
-            << ":" << static_cast<int>(d.ext.channelId.dType)
-            << ":" << static_cast<int>(d.ext.channelId.tType);
+        oss << d.ext.deviceId.number
+            << ":" << static_cast<int>(d.ext.deviceId.dType)
+            << ":" << static_cast<int>(d.ext.deviceId.tType);
         return oss.str();
     }
 
@@ -459,12 +461,12 @@ namespace ant {
         if (isDeviceChannelIdExt(data)) {
             const uint8_t* trailer = &data[10];
 
-            ext.hasDeviceChannelId = true;
-            ext.channelId.number = parseDeviceNumber(trailer);
+            ext.hasDeviceId = true;
+            ext.deviceId.number = parseDeviceNumber(trailer);
             offset = 2;
 
-            ext.channelId.dType = static_cast<uint8_t>(trailer[offset++]);
-            ext.channelId.tType = static_cast<uint8_t>(trailer[offset++]);
+            ext.deviceId.dType = static_cast<uint8_t>(trailer[offset++]);
+            ext.deviceId.tType = static_cast<uint8_t>(trailer[offset++]);
         }
 
         if (isRssiExt(data)) {
@@ -527,7 +529,7 @@ namespace ant {
         const uint8_t* payload = &data[1];
         const uint8_t page = payload[0];
 
-        const bool isDevice = assetPages.count(page);
+        const bool isDevice = assetPages.contains(page);
 
         if (isDevice) {
             device.index = payload[1] & 0x1F;
@@ -538,6 +540,7 @@ namespace ant {
         }
 
         const auto knownKey = makeDeviceKey(device);
+        device.name = knownNames[knownKey][device.index];
 
         switch (page) {
             // Data Page 0x01 (Location Page 1) contains:
@@ -579,21 +582,21 @@ namespace ant {
             case PAGE_IDENTIFICATION_1: {
 
                 device.color = payload[2];
-                const std::string uName(reinterpret_cast<const char*>(&payload[3]), 5);
-
-                auto& uNames = knownNames[knownKey];
-                uNames[device.index] = uName;
-                device.uName = uName;
-
+                const std::string uName(reinterpret_cast<const char*>(&payload[3]),
+                        strnlen(reinterpret_cast<const char*>(&payload[3]), 5));
+                knownNames[knownKey][device.index] = {.uName = uName};
+                device.name = knownNames[knownKey][device.index];
                 break;
             }
             case PAGE_IDENTIFICATION_2: {
                 device.aType = payload[2];
-                const std::string lName(reinterpret_cast<const char*>(&payload[3]), 5);
-                auto& uNames = knownNames[knownKey];
-                device.uName = uNames[device.index];
-                device.lName = lName;
-                device.fName = device.uName + lName;
+                    const std::string lName(reinterpret_cast<const char*>(&payload[3]),
+                            strnlen(reinterpret_cast<const char*>(&payload[3]), 5));
+
+                device.name = knownNames[knownKey][device.index];
+                device.name.lName = lName;
+                device.name.lName = lName;
+                device.name.fName = device.name.uName + lName;
                 break;
             }
             default: break;
@@ -605,10 +608,10 @@ namespace ant {
     std::string formatDeviceChannelID(const ExtendedInfo& ext) {
         std::ostringstream oss;
 
-        oss << "Device Type: 0x" << toHexByte(ext.channelId.dType)
-            << " '" << describeDeviceType(ext.channelId.dType) << "'"
-            << " | Device #: 0x" << toHexByte(ext.channelId.number)
-            << " | Tx Type: 0x" << toHexByte(ext.channelId.tType);
+        oss << "Device Type: 0x" << toHexByte(ext.deviceId.dType)
+            << " '" << describeDeviceType(ext.deviceId.dType) << "'"
+            << " | Device #: 0x" << toHexByte(ext.deviceId.number)
+            << " | Tx Type: 0x" << toHexByte(ext.deviceId.tType);
 
         return oss.str();
     }
@@ -702,18 +705,24 @@ namespace ant {
                 if(device) {
                     if (needComma) oss << ",";
                     oss << "\"index\":" << static_cast<int>(device->index) << ",";
+                    oss << "\"type\":\"0x" << toHexByte(device->ext.deviceId.dType) << "\",";
+                    oss << "\"id\":\"0x" << toHexByte(device->ext.deviceId.number) << "\",";
+                    oss << "\"name\":\"" << jsonEscape(device->name.fName.length() ? device->name.fName : device->name.uName) << "\",";
+                    oss << "\"lat\":" << device->lat << ",";
+                    oss << "\"lon\":" << device->lon << ",";
                     oss << "\"distance\":" << device->distance << ",";
                     oss << "\"heading\":" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
                     oss << "\"situation\":\"" << toAssetSituationString(device->situation) << "\",";
-                    oss << "\"flags\":" << static_cast<int>(device->ext.flags) << ",";
+                    oss << "\"flags\":\"0x" << toHexByte(device->ext.flags) << "\",";
                     oss << "\"gpsLost\":" << (device->gpsLost ? "true" : "false") << ",";
                     oss << "\"commsLost\":" << (device->commsLost ? "true" : "false") << ",";
                     oss << "\"lowBattery\":" << (device->lowBattery ? "true" : "false") << ",";
-                    oss << "\"name\":\"" << jsonEscape(device->fName) << "\"";
                     needComma = true;
                 }
                 if (needComma) oss << ",";
-                oss << "\"text\":\"" << jsonEscape(text) << "\"";
+                if (logLevel <= LogLevel::Info) {
+                    oss << "\"text\":\"" << jsonEscape(text) << "\"";
+                }
                 oss << "}";
                 std::cout << oss.str() << std::endl;
                 break;
@@ -723,21 +732,30 @@ namespace ant {
                     std::ostringstream oss;
                     // CSV: page,index,distance,heading,situation,flags,gpsLost,commsLost,lowBattery,name,text
                     oss << (pageName ? pageName : "") << ","
+                        << '"' << (device->name.fName.length() ? device->name.fName : device->name.uName) << '"' << ","
                         << static_cast<int>(device->index) << ","
+                        << "0x" << toHexByte(device->ext.deviceId.number) << ","
+                        << "0x" << toHexByte(device->ext.deviceId.dType) << ","
+                        << device->lat << ","
+                        << device->lon << ","
                         << device->distance << ","
                         << std::fixed << std::setprecision(1) << device->headingDegrees << ","
                         << '"' << toAssetSituationString(device->situation) << '"' << ","
-                        << static_cast<int>(device->ext.flags) << ","
+                        << "0x" << toHexByte(device->ext.flags) << ","
                         << (device->gpsLost ? 1 : 0) << ","
                         << (device->commsLost ? 1 : 0) << ","
-                        << (device->lowBattery ? 1 : 0) << ","
-                        << '"' << device->fName << '"' << ","
-                        << '"' << text << '"';
+                        << (device->lowBattery ? 1 : 0);
+                    if (logLevel <= LogLevel::Info) {
+                        oss << "," <<  '"' << text << '"';
+                    }
                     std::cout << oss.str() << std::endl;
                 } else {
-                    std::cout
-                        << (pageName ? pageName : "") << ",,,,,,,,"
-                        << "\"\",\"" << text << "\"" << std::endl;
+                    std::ostringstream oss;
+                    oss << (pageName ? pageName : "") << ",,,,,,,,,,";
+                    if (logLevel <= LogLevel::Info) {
+                        oss << ",\"" << text << "\"";
+                    }
+                    std::cout << oss.str() << std::endl;
                 }
                 break;
             }
@@ -747,11 +765,13 @@ namespace ant {
     // Allow choosing verbosity of logging
     void setLogLevel(const LogLevel level)  {
         logLevel = level;
+        fine("Setting log level to " + std::to_string(static_cast<int>(level)));
     }
 
     // Allow choosing output format via programmatic setter only
     void setFormat(const OutputFormat fmt) {
         outputFormat = fmt;
+        fine("Setting output format to " + std::to_string(static_cast<int>(fmt)));
     }
 
     bool initialize(const USBDevice& pDevice, const UCHAR ucDeviceNumber) {
@@ -980,7 +1000,7 @@ namespace ant {
             std::ostringstream oss;
             oss << "[CH] #" << std::to_string(channel) << ": "
                 << "[ASSET/70] | Requested Asset Identification Pages from"
-                << " Device # 0x" << toHexByte(device.ext.channelId.number);
+                << " Device # 0x" << toHexByte(device.ext.deviceId.number);
             info(oss.str());
         }
     }
@@ -1161,9 +1181,9 @@ namespace ant {
 
         // Find known (upper) name
         auto& uNames = knownNames[knownKey];
-        const auto name = uNames[device.index];
-        if (!name.empty()) {
-            oss << " | " << name;
+        if (const auto name = uNames[device.index]; (!name.uName.empty() || name.fName.empty())) {
+            if (name.fName.length()) oss << " | " << name.fName.length();
+            else if(name.uName.length()) oss << " | " << name.uName.length();
         }
 
         if (device.gpsLost)     oss << " | GPS Lost";
@@ -1215,7 +1235,7 @@ namespace ant {
         const uint8_t channel = data[0];
         oss << "[CH] #" << std::to_string(channel) << ": "
             << "[ASSET/16] #" << static_cast<int>(device.index)
-            << " | Upper Name: " << device.uName
+            << " | Upper Name: " << device.name.uName
             << " | Color: " << static_cast<int>(device.color)
             << " | Flags: 0x" << toHexByte(device.ext.flags);
 
@@ -1239,7 +1259,7 @@ namespace ant {
         const uint8_t channel = data[0];
         oss << "[CH] #" << std::to_string(channel) << ": "
             << "[ASSET/17] #" << static_cast<int>(device.index)
-            << " | Full Name: " << device.fName
+            << " | Full Name: " << device.name.fName
             << " | Asset Type: " << describeAssetType(device.aType);
 
         if (isDeviceChannelIdExt(data)){

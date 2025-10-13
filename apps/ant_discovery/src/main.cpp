@@ -128,10 +128,10 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        ant::setFormat(outputFormat);
         ant::setLogLevel(verbose || outputFormat == ant::OutputFormat::Text
             ? logLevel : ant::LogLevel::None
         );
+        ant::setFormat(outputFormat);
 
         if (!ant::initialize(*devList[deviceNumber], deviceNumber)) {
             std::cerr << "ANT initialization failed." << std::endl;
