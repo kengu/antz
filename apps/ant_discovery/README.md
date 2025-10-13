@@ -17,23 +17,32 @@ This module is temporarily preserved during the migration to the modular
 - Handles channel assignment, extended message decoding, and page-based data interpretation
 - Contains initial implementation of event loop, retry logic, and basic device caching
 
-## ⚙️ Build Instructions
-This module is included conditionally from the top-level `CMakeLists.txt`:
-
-```cmake
-option(ANTZ_DISCOVERY "Include legacy ant_discovery module" ON)
-if(ANTZ_DISCOVERY)
-    add_subdirectory(ant_discovery)
-endif()
+## Build dependencies
+You need to install the following packages on your system:
+```bash
+# Update package list
+sudo apt update
+# C++ standard library types like uint8_t, threads, etc
+sudo apt install -y build-essential cmake git pkg-config
+# libusb for USB access
+sudo apt install -y libusb-1.0-0-dev
 ```
 
-To build:
+## ⚙️ Build Instructions
+This module is included conditionally from the top-level `CMakeLists.txt`:
+```cmake
+option(ANTZ_DISCOVERY "Include legacy ant_discovery module" ON)
+```
+It is default ON, so you can build it by default.
+
+To build (from project root):
 ```sh
 cmake -B build/darwin -S . -DANTZ_PLATFORM=darwin -DANTZ_DISCOVERY=ON
 cmake --build build/darwin --target ant_discovery
 ```
 
-## Migration Plan
+# Migration Plan
+- `ant_discovery` will be migrated to `libs/antz_core`
 - Functionality in `discovery.cpp` is being split into modular components:
     - Profile decoding → `libs/core`
     - Data bridging → `libs/bridge`
