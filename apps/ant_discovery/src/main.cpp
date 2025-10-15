@@ -4,6 +4,8 @@
 #include "usb_checker.cpp"
 
 #include <iostream>
+#include <algorithm>  // std::transform
+#include <cctype>     // std::tolower
 #include <csignal>
 #include <stdexcept>
 #include <thread>
@@ -52,10 +54,9 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         if (std::string arg = argv[i]; (arg == "-f" || arg == "--format") && i + 1 < argc) {
             std::string fmt = argv[++i];
-            std::ranges::transform(
-                fmt,
-                fmt.begin(),
-                [](const unsigned char c){ return std::tolower(c); }
+            std::transform(
+                fmt.begin(), fmt.end(), fmt.begin(),
+                [](unsigned char c){ return static_cast<char>(std::tolower(c)); }
             );
             if (fmt == "json")      outputFormat = ant::OutputFormat::JSON;
             else if (fmt == "csv")  outputFormat = ant::OutputFormat::CSV;
