@@ -20,12 +20,16 @@
 
 #include "hrm_discovery.h"
 #include "asset_tracker_discovery.h"
+#include "mqtt.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 constexpr UCHAR USER_CHANNEL_ASSET = 1;
+
+using ::MqttConfig;
+using ::MqttPublisher;
 
 namespace ant {
 
@@ -239,8 +243,8 @@ namespace ant {
     };
 
     struct ProductInfo {
-        uint32_t serial;
-        double swVersion;
+        uint32_t serial{};
+        double swVersion{};
         ExtendedInfo ext;
         std::chrono::system_clock::time_point ts; // Host timestamp of last update
     };
@@ -271,6 +275,8 @@ namespace ant {
         return meters / METERS_PER_DEGREE;
     }
 
+    static MqttConfig mqttCfg;
+    static MqttPublisher mqtt;
     static auto logLevel = LogLevel::Info;
     static auto outputFormat = OutputFormat::Text;
 
@@ -380,13 +386,23 @@ namespace ant {
     // Allow choosing verbosity of logging
     void setLogLevel(const LogLevel level)  {
         logLevel = level;
-        fine("Setting log level to " + std::to_string(static_cast<int>(level)));
+        fine("Setting log level to [" + std::to_string(static_cast<int>(level)) + "]");
     }
 
     // Allow choosing output format via programmatic setter only
     void setFormat(const OutputFormat fmt) {
         outputFormat = fmt;
-        fine("Setting output format to " + std::to_string(static_cast<int>(fmt)));
+        fine("Setting output format to [" + std::to_string(static_cast<int>(fmt)) + "]");
+    }
+
+    // Allow choosing output format via programmatic setter only
+    void setMqtt(const std::string& cnn) {
+        if (!parseMqttConnectionString(cnn, mqttCfg))
+        {
+            error("Invalid MQTT connection string [" + cnn + "]");
+            return;
+        }
+        fine("Setting MQTT connection string to [" + cnn + "]");
     }
 
     void setEpsLatLng(const double meters) {
@@ -805,12 +821,27 @@ namespace ant {
                 break;
             }
             case OutputFormat::JSON: {
-                std::cout << "{"
-                    << R"("page":")" << pageName << "\"," << text << "}" << std::endl;
+                std::ostringstream oss;
+                oss << "{" << R"("page":")" << pageName << "\"," << text << "}";
+                std::cout << oss.str() << std::endl;
+                if (mqttCfg.enabled) {
+                    const std::string topic = mqttCfg.topic;
+                    if (!mqtt.publish(topic, oss.str())) {
+                        error("Failed to publish to MQTT topic [" + topic + "]");
+                    }
+                }
                 break;
             }
             case OutputFormat::CSV: {
-                std::cout << pageName << "," << text << std::endl;
+                std::ostringstream oss;
+                oss << pageName << "," << text;
+                std::cout << oss.str() << std::endl;
+                if (mqttCfg.enabled) {
+                    const std::string topic = mqttCfg.topic;
+                    if (!mqtt.publish(mqttCfg.topic, oss.str())) {
+                        error("Failed to publish to MQTT topic [" + topic + "]");
+                    }
+                }
                 break;
             }
         }
@@ -1177,6 +1208,15 @@ namespace ant {
                 if (msg.ucMessageID == MESG_STARTUP_MESG_ID) break;
             }
         }
+
+        if (mqttCfg.enabled) {
+            if (!mqtt.start(mqttCfg)) {
+                ant::warn("Failed to connect to MQTT broker " + mqttCfg.host);
+            } else {
+                ant::info("Connected to MQTT broker " + mqttCfg.host + ":" + std::to_string(mqttCfg.port));
+            }
+        }
+        
         return true;
     }
 
@@ -2021,6 +2061,10 @@ namespace ant {
 
     void cleanup() {
         searching = false;
+        if (mqttCfg.enabled) {
+            mqtt.stop();
+            ant::info("Stopped MQTT client");
+        }
         if (pclANT) {
             info("Closing ANT channels...");
             for (const auto& ch : channels) {

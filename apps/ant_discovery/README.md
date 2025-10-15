@@ -7,6 +7,21 @@ and HRM profiles behave in real-time across multiple ANT channels.
 This module is temporarily preserved during the migration to the modular 
 `libs/antz_core`, `libs/antz_bridge`, and `libs/antz_platform` structure of the main `antz` project.
 
+## How to use
+If you have a ANT+ usb stick installed in the system, this is the recommended way to use ant_discovery.
+```bash
+ant_discovery -d 0
+```
+It tells the app to use the first ANT+ USB stick it finds. If you have several ANT+ sticks, you can 
+omit the `-d` flag and it will prompt you to select one. 
+
+There are several other options available, see `ant_discovery -h` for details. 
+* If you need to specify the minimum distance a device must move before
+outputting a message, you can use the `-e` flag which accepts a value in meters. 
+* If you want to output a specific message format, you can use the `-f` flag which accepts `text`, `json`, or `csv`. 
+* If you want to output to a specific MQTT broker, you can use the `-m` flag which accepts a MQTT connection string like
+`"mqtt://user:pass@broker.example.com:1883/ant?retain=1&qos=1"`. The message payload format is given by the `-f` flag. 
+
 ## Purpose
 - Provides a self-contained implementation of ANT+ message parsing, device management, and profile-specific handling (Asset Tracker, HRM)
 - Useful for regression testing, experimentation, and migration reference
@@ -26,6 +41,8 @@ sudo apt update
 sudo apt install -y build-essential cmake git pkg-config
 # libusb for USB access
 sudo apt install -y libusb-1.0-0-dev
+# libmosquitto-dev for MQTT support
+sudo apt install libmosquitto-dev.
 ```
 
 ## Build dependencies on MacOS (Darwin)
@@ -39,6 +56,8 @@ brew install cmake make pkg-config
 xcode-select --install
 # libusb for USB device access
 brew install libusb
+# mosquitto for MQTT support
+brew install mosquitto 
 ```
 
 ## ⚙️ Build Instructions

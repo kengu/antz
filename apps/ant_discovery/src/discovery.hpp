@@ -24,6 +24,7 @@ namespace ant {
     void setLogLevel(LogLevel level);
     void setEpsLatLng(double meters);
     void setEpsHeading(double degrees);
+    void setMqtt(const std::string& cnn);
     bool initialize(const USBDevice& pDevice, UCHAR ucDeviceNumber);
     bool startDiscovery();
     void runEventLoop();

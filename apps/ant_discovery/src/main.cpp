@@ -36,6 +36,8 @@ int main(int argc, char** argv) {
     std::signal(SIGTERM, onSignal);
 
     // Default to 0 unless overridden by -d/--device
+    double meters = 1;
+    std::string mqttCnn;
     UCHAR  deviceNumber = 0;
     auto deviceNotGiven = true;
 
@@ -73,15 +75,20 @@ int main(int argc, char** argv) {
         }
         else if (arg == "-e") {
             try {
-                const double meters = std::stod(argv[++i]);
-                ant::setEpsLatLng(meters);
+                meters = std::stod(argv[++i]);
             } catch (const std::exception& _) {
                 std::cerr << "Invalid value for " << arg << ": " << argv[i] << "\n";
                 return 2;
             }
         }
+        // --mqtt "mqtt://user:pass@broker.example.com:1883/ant?retain=1&qos=1"
+        else if (arg == "-m" || arg == "--mqtt") {
+            if (i + 1 < argc) {
+                mqttCnn = argv[++i];
+            }
+        }
         else if (arg == "-h" || arg == "--help") {
-            std::cout << "Usage: " << argv[0] << " [-f|--format text|json|csv] [-e <meters>] [-v|--verbose]\n";
+            std::cout << "Usage: " << argv[0] << " [-f|--format text|json|csv] [-e <meters>]  [-m|--mqtt <cnn>] [-v|--verbose]\n";
             return 0;
         }
     }
@@ -144,11 +151,13 @@ int main(int argc, char** argv) {
         } else {
             logLevel = outputFormat == ant::OutputFormat::Text
                 ? ant::LogLevel::Info
-                : ant::LogLevel::None;
+                : ant::LogLevel::Error;
         }
 
         ant::setLogLevel(logLevel);
         ant::setFormat(outputFormat);
+        ant::setMqtt(mqttCnn);
+        ant::setEpsLatLng(meters);
 
         if (!ant::initialize(*devList[deviceNumber], deviceNumber)) {
             std::cerr << "ANT initialization failed." << std::endl;
