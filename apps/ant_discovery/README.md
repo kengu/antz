@@ -67,10 +67,16 @@ option(ANTZ_DISCOVERY "Include legacy ant_discovery module" ON)
 ```
 It is default ON, so you can build it by default.
 
-To build (from project root):
+To build (from project root) on MacOS (Darwin):
 ```sh
 cmake -B build/darwin -S . -DANTZ_PLATFORM=darwin -DANTZ_DISCOVERY=ON
 cmake --build build/darwin --target ant_discovery
+```
+
+To build (from project root) on Linux:
+```sh
+cmake -B build/linux -S . -DANTZ_PLATFORM=linux -DANTZ_DISCOVERY=ON
+cmake --build build/linux --target ant_discovery
 ```
 
 # Migration Plan
