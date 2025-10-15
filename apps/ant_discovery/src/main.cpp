@@ -156,10 +156,10 @@ int main(int argc, char** argv) {
 
         ant::setLogLevel(logLevel);
         ant::setFormat(outputFormat);
-        ant::setMqtt(mqttCnn);
         ant::setEpsLatLng(meters);
+        if (!mqttCnn.empty()) ant::setMqtt(mqttCnn);
 
-        if (!ant::initialize(*devList[deviceNumber], deviceNumber)) {
+        if (!ant::initialize(deviceNumber)) {
             std::cerr << "ANT initialization failed." << std::endl;
             return 1;
         }

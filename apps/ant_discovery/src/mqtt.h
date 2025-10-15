@@ -21,7 +21,6 @@ inline bool parseMqttConnectionString(const std::string& uri, MqttConfig& cfg) {
     std::regex re(R"(^(mqtts?)://(?:([^:@]+)(?::([^@]+))?@)?([^:/?#]+)(?::(\d+))?(?:/([^?#]*))?(?:\?([^#]*))?$)");
     std::smatch m;
     if (!std::regex_match(uri, m, re)) {
-        std::cerr << "Invalid MQTT connection string: " << uri << std::endl;
         return false;
     }
 

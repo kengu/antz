@@ -25,7 +25,7 @@ namespace ant {
     void setEpsLatLng(double meters);
     void setEpsHeading(double degrees);
     void setMqtt(const std::string& cnn);
-    bool initialize(const USBDevice& pDevice, UCHAR ucDeviceNumber);
+    bool initialize(UCHAR ucDeviceNumber);
     bool startDiscovery();
     void runEventLoop();
     void cleanup();
