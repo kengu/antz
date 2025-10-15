@@ -102,14 +102,14 @@ int main(int argc, char** argv) {
         }
 
 
-        // Get all ANT devices (detected via USB)
-        const ANTDeviceList devList = USBDeviceHandle::GetAllDevices();
-        if (devList.GetSize() == 0) {
-            std::cerr << "No ANT devices found!" << std::endl;
-            return 1;
-        }
-
         if (deviceNotGiven) {
+            // Get all ANT devices (detected via USB)
+            const ANTDeviceList devList = USBDeviceHandle::GetAllDevices();
+            if (devList.GetSize() == 0) {
+                std::cerr << "No ANT devices found!" << std::endl;
+                return 1;
+            }
+
             std::cout << "Number of ANT devices found: " << devList.GetSize() << std::endl;
             for (unsigned int i = 0; i < devList.GetSize(); ++i) {
                 const USBDevice& dev = *devList[i];
@@ -138,11 +138,10 @@ int main(int argc, char** argv) {
 
                 std::cout << "USB Device [" << static_cast<unsigned int>(deviceNumber) << "]" << std::endl;
             }
-        }
-
-        if (deviceNumber >= devList.GetSize()){
-            std::cerr << "USB Device ["+ std::to_string(deviceNumber) + "] not found " << std::endl;
-            return 1;
+            if (deviceNumber >= devList.GetSize()){
+                std::cerr << "USB Device ["+ std::to_string(deviceNumber) + "] not found " << std::endl;
+                return 1;
+            }
         }
 
         if (verbose) {
