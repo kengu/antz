@@ -319,6 +319,12 @@ namespace ant {
         return !(lhs == rhs);
     }
 
+    inline size_t safe_strnlen(const char* s, size_t maxlen) {
+        size_t i = 0;
+        for (; i < maxlen && s[i] != '\0'; ++i) {}
+        return i;
+    }
+
     static DSIFramerANT *pclANT = nullptr;
     static DSISerialGeneric *pclSerial = nullptr;
     static std::set<std::string> pairedDevices;
@@ -702,16 +708,17 @@ namespace ant {
             case PAGE_IDENTIFICATION_1: {
 
                 device.color = payload[2];
-                const std::string uName(reinterpret_cast<const char*>(&payload[3]),
-                        strnlen(reinterpret_cast<const char*>(&payload[3]), 5));
+                const char* start = reinterpret_cast<const char*>(&payload[3]);
+                const size_t len = safe_strnlen(start, 5);
+                const std::string uName(start, len);
                 device.name.uName = uName;
                 break;
             }
             case PAGE_IDENTIFICATION_2: {
                 device.aType = payload[2];
-                    const std::string lName(reinterpret_cast<const char*>(&payload[3]),
-                            strnlen(reinterpret_cast<const char*>(&payload[3]), 5));
-
+                const char* start = reinterpret_cast<const char*>(&payload[3]);
+                const size_t len = safe_strnlen(start, 5);
+                const std::string lName(start, len);
                 device.name.lName = lName;
                 device.name.fName = device.name.uName + lName;
                 break;

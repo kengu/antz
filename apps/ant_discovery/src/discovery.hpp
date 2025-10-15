@@ -1,5 +1,7 @@
 #pragma once
 
+
+#include <string>
 #include "types.h"
 #include <usb_device_handle.hpp>
 
