@@ -269,6 +269,10 @@ namespace ant {
         std::chrono::system_clock::time_point ts; // Host timestamp of last update
     };
 
+    // -----
+    // Helper methods
+    // -----
+
     // Converts meters to degrees latitude/longitude (approximate, valid for small distances)
     constexpr double metersToDegrees(const double meters) {
         constexpr double METERS_PER_DEGREE = 111320.0; // average Earth radius at mid-latitudes
@@ -387,7 +391,6 @@ namespace ant {
     void error(const std::string& message) {
         log(LogLevel::Error, message);
     }
-
 
     // Allow choosing verbosity of logging
     void setLogLevel(const LogLevel level)  {
@@ -750,8 +753,224 @@ namespace ant {
         return oss.str();
     }
 
-    // Forward declare
-    void checkChannelWatchdogs();
+    // -------------------------------------------------
+    // Control methods
+    // -------------------------------------------------
+
+    bool initialize(const ULONG baud, const UCHAR ucDeviceNumber) {
+
+        DSIDebug::Init();
+        DSIDebug::SetDebug(true);
+        DSIDebug::SerialEnable(ucDeviceNumber, true);
+
+        info("ANT initialization started...");
+
+        pclSerial = new DSISerialGeneric();
+        if (!pclSerial->Init(baud, ucDeviceNumber)) {
+            std::ostringstream oss;
+            oss << "Failed to open USB port " << static_cast<int>(ucDeviceNumber);
+            info(oss.str());
+            return false;
+        }
+
+        pclANT = new DSIFramerANT(pclSerial);
+        pclSerial->SetCallback(pclANT);
+        if (!pclANT->Init()) {
+            error("Framer Init failed: code " + std::to_string(pclANT->GetLastError()));
+            return false;
+        }
+        if (!pclSerial->Open()) {
+            info("Serial Open failed: USB Device [" + std::to_string(ucDeviceNumber) + "]") ;
+            return false;
+        }
+
+        pclANT->ResetSystem();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+        while (true) {
+            const USHORT length = pclANT->WaitForMessage(MESSAGE_TIMEOUT);
+            if (length > 0 && length != DSI_FRAMER_TIMEDOUT) {
+                ANT_MESSAGE msg;
+                pclANT->GetMessage(&msg);
+                std::ostringstream oss;
+                oss << "Message ID was " << static_cast<int>(msg.ucMessageID);
+                info(oss.str());
+                if (msg.ucMessageID == MESG_STARTUP_MESG_ID) break;
+            }
+        }
+
+        if (mqttCfg.enabled) {
+            if (!mqtt.start(mqttCfg)) {
+                ant::warn("Failed to connect to MQTT broker " + mqttCfg.host);
+            } else {
+                ant::info("Connected to MQTT broker " + mqttCfg.host + ":" + std::to_string(mqttCfg.port));
+            }
+        }
+
+        return true;
+    }
+
+    bool openChannel(const Channel& ch) {
+        const std::string suffix = " failed for channel #" + std::to_string(ch.cNum);
+        if (!pclANT->AssignChannel(ch.cNum, ch.cType, USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
+            error("AssignChannel" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelID(ch.cNum, ch.dNum, ch.dType, ch.tType, MESSAGE_TIMEOUT)) {
+            error("SetChannelID" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelPeriod(ch.cNum, ch.period,MESSAGE_TIMEOUT)) {
+            error("SetChannelPeriod" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelRFFrequency(ch.cNum, ch.rfFreq,MESSAGE_TIMEOUT)) {
+            error("SetChannelRFFrequency" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
+            error("SetNetworkKey failed" + suffix);
+            return false;
+        }
+
+        if (!pclANT->SetChannelSearchTimeout(ch.cNum, ch.searchTimeout, MESSAGE_TIMEOUT)) {
+            error("SetChannelSearchTimeout" + suffix);
+            return false;
+        }
+
+        if (!pclANT->OpenChannel(ch.cNum,MESSAGE_TIMEOUT)) {
+            error("OpenChannel" + suffix);
+            return false;
+        }
+
+        std::ostringstream oss;
+        oss <<"Opened ANT Channel #" << std::to_string(ch.cNum)
+            << " | Channel Type: 0x" + toHexByte(ch.cType)
+            << " | Device #: 0x" + toHexByte(ch.dNum)
+            << " | Device Type: 0x" + toHexByte(ch.dType)
+            << " | Tx Type: 0x" + toHexByte(ch.tType);
+        info(oss.str());
+        return true;
+    }
+
+    bool closeChannel(const uint8_t number) {
+        if (!pclANT) {
+            error("Failed to close channel #"
+                + std::to_string(number)
+                + "[closeChannel] ANT framer is not initialized");
+            return false;
+        }
+
+        if (!pclANT->CloseChannel(number, MESSAGE_TIMEOUT)) {
+            error("Failed to close channel #" + std::to_string(number));
+            return false;
+        }
+        if (!pclANT->UnAssignChannel(number, MESSAGE_TIMEOUT)) {
+            error("Failed to unassign channel #" + std::to_string(number));
+            return false;
+        }
+
+        info("Channel #" + std::to_string(number) + " [CLOSED]");
+        return true;
+    }
+
+    bool startDiscovery() {
+        info("Starting ANT+ discovery...");
+
+        if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
+            error("SetNetworkKey failed");
+            return false;
+        }
+
+        info("Opening ANT channels...");
+        for (const auto& ch : channels) {
+            if (!ch.use) {
+                fine("Channel #" + std::to_string(ch.cNum) + " [SKIPPED]");
+                continue;
+            }
+            openChannel(ch);
+        }
+
+        info("Opening ANT channels...DONE");
+        if (!pclANT->RxExtMesgsEnable(TRUE)) {
+            error("Failed to enable extended message format mode");
+            return false;
+        }
+
+        info("Starting ANT+ discovery...DONE");
+        return true;
+    }
+
+    bool searching = true;
+
+    void checkChannelWatchdogs() {
+        const auto now = std::chrono::steady_clock::now();
+
+        for (auto& entry : channelStates) {
+
+            ChannelState& state = entry.second;
+            if (!state.active) continue;
+
+            uint8_t channel = entry.first;
+
+            const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - state.lastSeen).count();
+            if (durationMs > WATCHDOG_TIMEOUT_MS) {
+                warn("[WATCHDOG] Channel #" + std::to_string(channel) +
+                     " unresponsive for " + std::to_string(durationMs) + "ms. Reinitializing...");
+
+                closeChannel(channel);
+                const auto it = std::find_if(channels.begin(), channels.end(), [&](const Channel& ch) {
+                    return ch.cNum == channel;
+                });
+
+                if (it != channels.end()) {
+                    openChannel(*it);
+                    state.lastSeen = now;  // Reset
+                }
+            }
+        }
+    }
+
+    void cleanup() {
+        searching = false;
+        if (mqttCfg.enabled) {
+            mqtt.stop();
+            ant::info("Stopped MQTT client");
+        }
+        if (pclANT) {
+            info("Closing ANT channels...");
+            for (const auto& ch : channels) {
+                if (!ch.use) {
+                    fine("Channel #" + std::to_string(ch.cNum) + " [SKIPPED]");
+                    continue;
+                }
+                closeChannel(ch.cNum);
+            }
+            info("Closing ANT channels...DONE");
+
+            info("ANT system reset...");
+            if(!pclANT->ResetSystem()) {
+                error("Failed to reset ANT System");
+            } else {
+                info("ANT system reset...DONE");
+            }
+        }
+
+        if (pclSerial) {
+            info("Closing USB port...");
+            pclSerial->Close();
+            info("Closing USB port...DONE");
+        }
+
+    }
+
+    // -------------------------------------------------
+    // Message methods
+    // -------------------------------------------------
 
     // Assumes Broadcast Data message
     void dumpBroadcastRaw(const UCHAR ucMessageID, const UCHAR* data, const UCHAR length) {
@@ -1172,127 +1391,6 @@ namespace ant {
         devMap[device.index] = updatedDevice;
 
         outputDevice(pageName, &devMap[device.index], ageSeconds, text);
-    }
-
-    bool initialize(const ULONG baud, const UCHAR ucDeviceNumber) {
-
-        DSIDebug::Init();
-        DSIDebug::SetDebug(true);
-        DSIDebug::SerialEnable(ucDeviceNumber, true);
-
-        info("ANT initialization started...");
-
-        pclSerial = new DSISerialGeneric();
-        if (!pclSerial->Init(baud, ucDeviceNumber)) {
-            std::ostringstream oss;
-            oss << "Failed to open USB port " << static_cast<int>(ucDeviceNumber);
-            info(oss.str());
-            return false;
-        }
-
-        pclANT = new DSIFramerANT(pclSerial);
-        pclSerial->SetCallback(pclANT);
-        if (!pclANT->Init()) {
-            error("Framer Init failed: code " + std::to_string(pclANT->GetLastError()));
-            return false;
-        }
-        if (!pclSerial->Open()) {
-            info("Serial Open failed: USB Device [" + std::to_string(ucDeviceNumber) + "]") ;
-            return false;
-        }
-
-        pclANT->ResetSystem();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-        while (true) {
-            const USHORT length = pclANT->WaitForMessage(MESSAGE_TIMEOUT);
-            if (length > 0 && length != DSI_FRAMER_TIMEDOUT) {
-                ANT_MESSAGE msg;
-                pclANT->GetMessage(&msg);
-                std::ostringstream oss;
-                oss << "Message ID was " << static_cast<int>(msg.ucMessageID);
-                info(oss.str());
-                if (msg.ucMessageID == MESG_STARTUP_MESG_ID) break;
-            }
-        }
-
-        if (mqttCfg.enabled) {
-            if (!mqtt.start(mqttCfg)) {
-                ant::warn("Failed to connect to MQTT broker " + mqttCfg.host);
-            } else {
-                ant::info("Connected to MQTT broker " + mqttCfg.host + ":" + std::to_string(mqttCfg.port));
-            }
-        }
-        
-        return true;
-    }
-
-    bool openChannel(const Channel& ch) {
-        const std::string suffix = " failed for channel #" + std::to_string(ch.cNum);
-        if (!pclANT->AssignChannel(ch.cNum, ch.cType, USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
-            error("AssignChannel" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelID(ch.cNum, ch.dNum, ch.dType, ch.tType, MESSAGE_TIMEOUT)) {
-            error("SetChannelID" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelPeriod(ch.cNum, ch.period,MESSAGE_TIMEOUT)) {
-            error("SetChannelPeriod" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelRFFrequency(ch.cNum, ch.rfFreq,MESSAGE_TIMEOUT)) {
-            error("SetChannelRFFrequency" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
-            error("SetNetworkKey failed" + suffix);
-            return false;
-        }
-
-        if (!pclANT->SetChannelSearchTimeout(ch.cNum, ch.searchTimeout, MESSAGE_TIMEOUT)) {
-            error("SetChannelSearchTimeout" + suffix);
-            return false;
-        }
-
-        if (!pclANT->OpenChannel(ch.cNum,MESSAGE_TIMEOUT)) {
-            error("OpenChannel" + suffix);
-            return false;
-        }
-
-        std::ostringstream oss;
-        oss <<"Opened ANT Channel #" << std::to_string(ch.cNum)
-            << " | Channel Type: 0x" + toHexByte(ch.cType)
-            << " | Device #: 0x" + toHexByte(ch.dNum)
-            << " | Device Type: 0x" + toHexByte(ch.dType)
-            << " | Tx Type: 0x" + toHexByte(ch.tType);
-        info(oss.str());
-        return true;
-    }
-
-    bool closeChannel(const uint8_t number) {
-        if (!pclANT) {
-            error("Failed to close channel #"
-                + std::to_string(number)
-                + "[closeChannel] ANT framer is not initialized");
-            return false;
-        }
-
-        if (!pclANT->CloseChannel(number, MESSAGE_TIMEOUT)) {
-            error("Failed to close channel #" + std::to_string(number));
-            return false;
-        }
-        if (!pclANT->UnAssignChannel(number, MESSAGE_TIMEOUT)) {
-            error("Failed to unassign channel #" + std::to_string(number));
-            return false;
-        }
-
-        info("Channel #" + std::to_string(number) + " [CLOSED]");
-        return true;
     }
 
     bool shouldRequestPageAgain(const Device& d, const uint8_t page) {
@@ -1933,6 +2031,7 @@ namespace ant {
     }
 
 
+
     void dispatchBroadcastDataMessage(const ANT_MESSAGE& msg, const UCHAR length) {
 
         const UCHAR* d = msg.aucData;
@@ -1950,35 +2049,6 @@ namespace ant {
                 break;
         }
     }
-
-    bool startDiscovery() {
-        info("Starting ANT+ discovery...");
-
-        if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
-            error("SetNetworkKey failed");
-            return false;
-        }
-
-        info("Opening ANT channels...");
-        for (const auto& ch : channels) {
-            if (!ch.use) {
-                fine("Channel #" + std::to_string(ch.cNum) + " [SKIPPED]");
-                continue;
-            }
-            openChannel(ch);
-        }
-
-        info("Opening ANT channels...DONE");
-        if (!pclANT->RxExtMesgsEnable(TRUE)) {
-            error("Failed to enable extended message format mode");
-            return false;
-        }
-
-        info("Starting ANT+ discovery...DONE");
-        return true;
-    }
-
-    bool searching = true;
 
     void runEventLoop() {
         info("Starting event loop...");
@@ -2035,75 +2105,6 @@ namespace ant {
                 checkChannelWatchdogs();
             }
         }
-    }
-
-    void checkChannelWatchdogs() {
-        const auto now = std::chrono::steady_clock::now();
-
-        for (auto& entry : channelStates) {
-
-            ChannelState& state = entry.second;
-            if (!state.active) continue;
-
-            uint8_t channel = entry.first;
-
-            const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - state.lastSeen).count();
-            if (durationMs > WATCHDOG_TIMEOUT_MS) {
-                warn("[WATCHDOG] Channel #" + std::to_string(channel) +
-                     " unresponsive for " + std::to_string(durationMs) + "ms. Reinitializing...");
-
-                closeChannel(channel);
-                const auto it = std::find_if(channels.begin(), channels.end(), [&](const Channel& ch) {
-                    return ch.cNum == channel;
-                });
-
-                if (it != channels.end()) {
-                    openChannel(*it);
-                    state.lastSeen = now;  // Reset
-                }
-            }
-        }
-    }
-
-
-    void cleanup() {
-        searching = false;
-        if (mqttCfg.enabled) {
-            mqtt.stop();
-            ant::info("Stopped MQTT client");
-        }
-        if (pclANT) {
-            info("Closing ANT channels...");
-            for (const auto& ch : channels) {
-                if (!ch.use) {
-                    fine("Channel #" + std::to_string(ch.cNum) + " [SKIPPED]");
-                    continue;
-                }
-                closeChannel(ch.cNum);
-            }
-
-            /*
-            pclANT->CloseChannel(HRM_CHANNEL);
-            pclANT->UnAssignChannel(HRM_CHANNEL);
-            pclANT->CloseChannel(USER_CHANNEL_ASSET);
-            pclANT->UnAssignChannel(USER_CHANNEL_ASSET);
-            pclANT->CloseChannel(2);
-            pclANT->UnAssignChannel(2);
-            */
-            if(!pclANT->ResetSystem()) {
-                error("Failed to reset ANT System");
-            }
-
-            delete pclANT;
-            pclANT = nullptr;
-        }
-
-        if (pclSerial) {
-            pclSerial->Close();
-            delete pclSerial;
-            pclSerial = nullptr;
-        }
-        info("Closing ANT channels...DONE");
     }
 
 } // namespace ant

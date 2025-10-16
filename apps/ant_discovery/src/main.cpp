@@ -32,7 +32,13 @@ static void onSignal(int) {
     ::_exit(0);
 }
 
-int main(int argc, char** argv) {
+void usage(char** argv)
+{
+    std::cout << "Usage: " << argv[0] <<
+        " [-f|--format text|json|csv] [-e <meters>]  [-m|--mqtt <cnn>] [-v|--verbose]\n";
+}
+
+int main(const int argc, char** argv) {
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
 
@@ -88,7 +94,7 @@ int main(int argc, char** argv) {
             }
         }
         else if (arg == "-h" || arg == "--help") {
-            std::cout << "Usage: " << argv[0] << " [-f|--format text|json|csv] [-e <meters>]  [-m|--mqtt <cnn>] [-v|--verbose]\n";
+            usage(argv);
             return 0;
         }
     }
@@ -96,10 +102,21 @@ int main(int argc, char** argv) {
     try {
 
         if (!check_usb_is_available()) {
-            std::cout << "USB is not available." << std::endl;
+            std::cerr << "USB is not available." << std::endl;
             return 1;
         }
 
+// On Linux, we have some troubles with calling
+// USBDeviceHandle::GetAllDevices() on the main thread.
+// Workaround is to require that device is given.
+#ifdef __linux__
+        if (deviceNotGiven) {
+            if (deviceNumber == 0xFF) {
+                std::cerr << "Device not given" << std::endl;
+                usage(argv);
+            }
+        }
+#else
         if (deviceNotGiven) {
             // Get all ANT devices (detected via USB)
             const ANTDeviceList devList = USBDeviceHandle::GetAllDevices();
@@ -143,6 +160,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
+#endif
 
         if (verbose) {
             logLevel = outputFormat == ant::OutputFormat::Text
