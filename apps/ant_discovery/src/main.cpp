@@ -5,13 +5,12 @@
 
 #include <iostream>
 #include <algorithm>  // std::transform
-#include <cctype>     // std::tolower
 #include <csignal>
 #include <stdexcept>
-#include <thread>
 #include <chrono>
 #include <unistd.h>
 #include <usb_device_handle.hpp>
+#include "dsi_serial_generic.hpp"
 
 void print_stacktrace() {
     constexpr int max_frames = 64;
@@ -101,10 +100,11 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-
         if (deviceNotGiven) {
             // Get all ANT devices (detected via USB)
             const ANTDeviceList devList = USBDeviceHandle::GetAllDevices();
+            std::cout << "Device count is " << devList.GetSize() << std::endl;
+
             if (devList.GetSize() == 0) {
                 std::cerr << "No ANT devices found!" << std::endl;
                 return 1;

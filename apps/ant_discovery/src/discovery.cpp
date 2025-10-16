@@ -1227,7 +1227,7 @@ namespace ant {
         return true;
     }
 
-        bool openChannel(const Channel& ch) {
+    bool openChannel(const Channel& ch) {
         const std::string suffix = " failed for channel #" + std::to_string(ch.cNum);
         if (!pclANT->AssignChannel(ch.cNum, ch.cType, USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
             error("AssignChannel" + suffix);
