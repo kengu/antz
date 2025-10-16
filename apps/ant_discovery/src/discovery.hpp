@@ -2,6 +2,7 @@
 
 
 #include <string>
+#include <vector>
 #include "types.h"
 #include <usb_device_handle.hpp>
 
@@ -15,15 +16,22 @@ namespace ant {
         None = 256,
     };
 
-    // ===== Output format support (Text / JSON / CSV) =====
+    enum class AntProfile {
+        Unknown,
+        HeartRate,
+        AssetTracker,
+    };
+
     enum class OutputFormat {
         Text,
         JSON,
         CSV
     };
 
+
     void setFormat(OutputFormat fmt);
     void setLogLevel(LogLevel level);
+    void setSearch(const std::vector<AntProfile>& types);
     void setEpsLatLng(double meters);
     void setEpsHeading(double degrees);
     void setMqtt(const std::string& cnn);

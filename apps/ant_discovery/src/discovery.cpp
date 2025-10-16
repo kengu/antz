@@ -45,55 +45,62 @@ namespace ant {
         uint8_t searchTimeout = 0;
     };
 
+    /**
+     * @brief Configuration for the Heart Rate Monitor (HRM) search channel.
+     *
+     * This variable defines the parameters for the HRM channel search mode,
+     * including its state, network number, channel type, RF frequency, device type,
+     * transmission type, search timeout, data page size, and extended assignment.
+     *
+     * @note This is a constant configuration and should not be modified at runtime.
+     */
+    static constexpr Channel HRM_SEARCH_CH = {true, 0x00,  0x00, 0x00, 0x78, 0x00, 8070, 57, 0x012};
+
+    // -----------------------------------------------------------------------------
+    // ANT+ Asset Tracker – Pairing Mode
+    //
+    // This configuration enables ANT+ pairing as defined in the Device Profile
+    // "ANT+ Asset Tracker Rev 1.0", Chapter 6: Device Pairing.
+    //
+    // Key behaviors:
+    // - The receiver (e.g., this app or a Fenix watch) opens an ANT channel using:
+    //     - Device #:        0 (wildcard)
+    //     - Device Type:      0x29 (Asset Tracker)
+    //     - Transmission Type: 0 (wildcard, required for pairing)
+    //     - Channel Period:   2048 (16 Hz) – mandatory for Asset Tracker
+    //     - RF Frequency:     2457 MHz – standard for most ANT+ profiles
+    //
+    // - No data is transmitted by the receiver during pairing.
+    // - The receiver listens passively for Location Page 0x01 messages.
+    // - A valid pairing candidate must send:
+    //     - Page 0x01 with a valid index, distance and bearing
+    //     - Extended data ("Rx trailer") with:
+    //         - Device # (2 bytes)
+    //         - Device Type (0x29)
+    //         - Transmission Type (any, 0x00 preferred)
+    //         - Optionally RSSI / Proximity info (flags 0xD0+)
+    // - Once a message is received, the receiver may cache the Device # and
+    //   Transmission Type for future use (persistent pairing).
+    // - To be compatible with future devices, **any Transmission Type returned
+    //   is valid** and should be accepted.
+    //
+    // Reference:
+    // ANT+ Asset Tracker Device Profile, Rev 1.0 – Section 6: Device Pairing
+    // -----------------------------------------------------------------------------
+    static constexpr Channel TRK_SEARCH_CH = {true, 0x01,  0x00, 0x00, 0x29, 0x00, 2048, 57, 0x03};
+
     std::vector<Channel> channels = {
-        {false, 0x00,  0x00, 0x00, 0x78, 0x00, 8070, 57, 0x012},  // HMR search
-        {false, 0x01,  0x00, 0x2BB3, 0x78, 0x51, 8070, 57, 0x012},   // Paired HRM
-        // -----------------------------------------------------------------------------
-        // ANT+ Asset Tracker – Pairing Mode
-        //
-        // This configuration enables ANT+ pairing as defined in the Device Profile
-        // "ANT+ Asset Tracker Rev 1.0", Chapter 6: Device Pairing.
-        //
-        // Key behaviors:
-        // - The receiver (e.g., this app or a Fenix watch) opens an ANT channel using:
-        //     - Device #:        0 (wildcard)
-        //     - Device Type:      0x29 (Asset Tracker)
-        //     - Transmission Type: 0 (wildcard, required for pairing)
-        //     - Channel Period:   2048 (16 Hz) – mandatory for Asset Tracker
-        //     - RF Frequency:     2457 MHz – standard for most ANT+ profiles
-        //
-        // - No data is transmitted by the receiver during pairing.
-        // - The receiver listens passively for Location Page 0x01 messages.
-        // - A valid pairing candidate must send:
-        //     - Page 0x01 with a valid index, distance and bearing
-        //     - Extended data ("Rx trailer") with:
-        //         - Device # (2 bytes)
-        //         - Device Type (0x29)
-        //         - Transmission Type (any, 0x00 preferred)
-        //         - Optionally RSSI / Proximity info (flags 0xD0+)
-        // - Once a message is received, the receiver may cache the Device # and
-        //   Transmission Type for future use (persistent pairing).
-        // - To be compatible with future devices, **any Transmission Type returned
-        //   is valid** and should be accepted.
-        //
-        // Reference:
-        // ANT+ Asset Tracker Device Profile, Rev 1.0 – Section 6: Device Pairing
-        // -----------------------------------------------------------------------------
-        {false, 2,  0x00, 0x00, 0x29, 0x00, 2048, 57, 0x03},    // Asset search
-        {false, 3,  0x00, 0x024A, 0x29, 0xD5, 2048, 57, 0x06},   // Paired Alpha 10
-        {true, 4,  0x00, 0x7986, 0x29, 0x65, 2048, 57, 0x03},  // Paired Astro 320
+        HRM_SEARCH_CH,
+        TRK_SEARCH_CH,
+        {false, 0x02,  0x00, 0x2BB3, 0x78, 0x51, 8070, 57, 0x012},  // Paired HRM
+        {false, 0x03,  0x00, 0x024A, 0x29, 0xD5, 2048, 57, 0x06},   // Paired Alpha 10
+        {false, 0x04,  0x00, 0x7986, 0x29, 0x65, 2048, 57, 0x03},   // Paired Astro 320
     };
 
     struct ChannelState {
         std::chrono::steady_clock::time_point lastSeen;
         int8_t lastRssi = 0;
         bool active = true;
-    };
-
-    enum class AntProfile {
-        Unknown,
-        HeartRate,
-        AssetTracker,
     };
 
     std::string toAntProfileString(const AntProfile s) {
@@ -282,6 +289,7 @@ namespace ant {
     static MqttConfig mqttCfg;
     static MqttPublisher mqtt;
     static auto logLevel = LogLevel::Info;
+    static std::vector<AntProfile> deviceTypes;
     static auto outputFormat = OutputFormat::Text;
 
     // Epsilon constants for approximate comparisons
@@ -404,7 +412,33 @@ namespace ant {
         fine("Setting output format to [" + std::to_string(static_cast<int>(fmt)) + "]");
     }
 
-    // Allow choosing output format via programmatic setter only
+    void setSearch(const std::vector<AntProfile>& types){
+        if (types.empty()) {
+            channels = {
+                HRM_SEARCH_CH,
+                TRK_SEARCH_CH
+            };
+            return;
+        }
+        channels.clear();
+        for (const auto& type : types) {
+            switch (type) {
+            case AntProfile::HeartRate:
+                channels.push_back(HRM_SEARCH_CH);
+                info("Active search for device type [" + toAntProfileString(type) + "]");
+                break;
+            case AntProfile::AssetTracker:
+                channels.push_back(TRK_SEARCH_CH);
+                info("Active search for device type [" + toAntProfileString(type) + "]");
+                break;
+            default:
+                break;
+            }
+        }
+        deviceTypes = types;
+    }
+
+        // Allow choosing output format via programmatic setter only
     void setMqtt(const std::string& cnn) {
         if (!parseMqttConnectionString(cnn, mqttCfg))
         {
@@ -886,7 +920,7 @@ namespace ant {
             return false;
         }
 
-        info("Opening ANT channels...");
+        info("Opening ANT channels... (" + std::to_string(channels.size()) + ")");
         for (const auto& ch : channels) {
             if (!ch.use) {
                 fine("Channel #" + std::to_string(ch.cNum) + " [SKIPPED]");

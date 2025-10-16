@@ -8,6 +8,7 @@
 #include <csignal>
 #include <stdexcept>
 #include <chrono>
+#include <vector>
 #include <unistd.h>
 #include <usb_device_handle.hpp>
 #include "dsi_serial_generic.hpp"
@@ -34,8 +35,16 @@ static void onSignal(int) {
 
 void usage(char** argv)
 {
-    std::cout << "Usage: " << argv[0] <<
-        " [-f|--format text|json|csv] [-e <meters>]  [-m|--mqtt <cnn>] [-v|--verbose]\n";
+    std::cout << "Usage: " << argv[0] << " [parameters]" << std::endl
+    << "* USB device        : -d,--device <number>          Example: -d 1" << std::endl
+    << "* Device search     : -s,--search <hrm,tracker>     Example: -s tracker" << std::endl
+    << "* Output format     : -f,--format <text|json|csv>   Example: -f json" << std::endl
+    << "* Minimum distance  : -e,--eps <meters>             Example: -e 3" << std::endl
+    << "* MQTT broker       : -m,--mqtt <cnn>               Example: -m mqtt://user:pass@broker.example.com:1883/ant?retain=1&qos=1" << std::endl
+    << "* Verbose output    : -v,--verbose" << std::endl
+    << "* Show this help    : -h,--help" << std::endl
+    << std::endl;
+
 }
 
 int main(const int argc, char** argv) {
@@ -45,9 +54,9 @@ int main(const int argc, char** argv) {
     // Default to 0 unless overridden by -d/--device
     double meters = 1;
     std::string mqttCnn;
-    UCHAR  deviceNumber = 0;
+    UCHAR  deviceNumber = 0xFF;
     auto deviceNotGiven = true;
-
+    std::vector<ant::AntProfile> types;
     // Default to false/Info unless overridden by -v/--verbose
     auto verbose = false;
     auto logLevel = ant::LogLevel::Info;
@@ -67,9 +76,28 @@ int main(const int argc, char** argv) {
             else if (fmt == "csv")  outputFormat = ant::OutputFormat::CSV;
             else if (fmt == "text") outputFormat = ant::OutputFormat::Text;
             else {
-                std::cerr << "Unknown format: " << fmt
+                std::cerr << "ERROR: Unknown output format " << arg << "=" << argv[i]
                           << " (expected text, json, or csv)" << std::endl;
+                usage(argv);
                 return 1;
+            }
+        }
+        else if (arg = argv[i]; (arg == "-s" || arg == "--search")) {
+            std::string type;
+            std::stringstream values(argv[++i]);
+            while (std::getline(values, type, ',')){
+                std::transform(
+                    type.begin(), type.end(), type.begin(),
+                    [](unsigned char c){ return static_cast<char>(std::tolower(c)); }
+                );
+                if (type == "hrm")           types.push_back(ant::AntProfile::HeartRate);
+                else if (type == "tracker")  types.push_back(ant::AntProfile::AssetTracker);
+                else {
+                    std::cerr << "ERROR: Unknown device type " << arg << "=" << argv[i]
+                              << " (expected hrm or tracker)" << std::endl;
+                    usage(argv);
+                    return 1;
+                }
             }
         }
         else if (arg == "-v" || arg == "--verbose") {
@@ -83,7 +111,9 @@ int main(const int argc, char** argv) {
             try {
                 meters = std::stod(argv[++i]);
             } catch (const std::exception& _) {
-                std::cerr << "Invalid value for " << arg << ": " << argv[i] << "\n";
+                std::cerr << "ERROR: Invalid value for minimum distance " << arg << "=" << argv[i]
+                          << " (expected number)" << std::endl;
+                usage(argv);
                 return 2;
             }
         }
@@ -173,6 +203,7 @@ int main(const int argc, char** argv) {
 
         ant::setLogLevel(logLevel);
         ant::setFormat(outputFormat);
+        ant::setSearch(types);
         ant::setEpsLatLng(meters);
         if (!mqttCnn.empty()) ant::setMqtt(mqttCnn);
 
