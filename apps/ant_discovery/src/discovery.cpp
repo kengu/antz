@@ -759,6 +759,11 @@ namespace ant {
         info("Starting ANT+ discovery...");
 
         loadPairedChannels();
+        if (channels.empty() && searchTypes.empty()){
+            searchTypes.push_back(AntProfile::HeartRate);
+            searchTypes.push_back(AntProfile::AssetTracker);
+        }
+
         for (const auto& type : searchTypes) {
             switch (type) {
             case AntProfile::HeartRate:
