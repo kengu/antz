@@ -159,7 +159,7 @@ int main(int argc, char** argv) {
         ant::setEpsLatLng(meters);
         if (!mqttCnn.empty()) ant::setMqtt(mqttCnn);
 
-        if (!ant::initialize(deviceNumber)) {
+        if (!ant::initialize(57600, deviceNumber)) {
             std::cerr << "ANT initialization failed." << std::endl;
             return 1;
         }
