@@ -111,10 +111,9 @@ int main(const int argc, char** argv) {
 // Workaround is to require that device is given.
 #ifdef __linux__
         if (deviceNotGiven) {
-            if (deviceNumber == 0xFF) {
-                std::cerr << "Device not given" << std::endl;
-                usage(argv);
-            }
+            std::cerr << "ERROR: Device not given." << std::endl;
+            usage(argv);
+            return 1;
         }
 #else
         if (deviceNotGiven) {
