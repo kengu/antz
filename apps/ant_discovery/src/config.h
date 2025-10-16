@@ -78,16 +78,16 @@ namespace ant {
   static constexpr Channel TRK_SEARCH_CH = {true, 0x01,  0x00, 0x00, 0x29, 0x00, 2048, 57, 0x03};
 
   inline std::vector<Channel> channels = {
+    /*
       HRM_SEARCH_CH,
       TRK_SEARCH_CH,
       {false, 0x02,  0x00, 0x2BB3, 0x78, 0x51, 8070, 57, 0x012},  // Paired HRM
       {false, 0x03,  0x00, 0x024A, 0x29, 0xD5, 2048, 57, 0x06},   // Paired Alpha 10
       {false, 0x04,  0x00, 0x7986, 0x29, 0x65, 2048, 57, 0x03},   // Paired Astro 320
+    */
   };
 
   inline constexpr uint8_t MAX_SEARCH_CH = 2;
-
-  inline std::set<std::string> pairedDevices;
 
   void info(const std::string& message);
   void warn(const std::string& message);
@@ -110,13 +110,13 @@ namespace ant {
   }
 
   // Optional override if you want to tweak defaults at runtime.
-  inline void set_paired_defaults(const PairedDefaults& d) {
+  inline void setPairedDefaults(const PairedDefaults& d) {
     defaults() = d;
   }
 
   // ---- Paired store path and override ----
 
-  inline std::string& paired_store_path_ref() {
+  inline std::string& pairedStorePathRef() {
     static std::string path = []{
     #if defined(_WIN32)
       const char* appdata = std::getenv("APPDATA");
@@ -137,23 +137,23 @@ namespace ant {
     return path;
   }
 
-  inline const std::string& get_paired_store_path() {
-    return paired_store_path_ref();
+  inline const std::string& getPairedStorePath() {
+    return pairedStorePathRef();
   }
 
-  inline void set_paired_store_path(const std::string& p) {
-    paired_store_path_ref() = p;
+  inline void setPairedStorePath(const std::string& p) {
+    pairedStorePathRef() = p;
   }
 
   // ---- Helpers ----
 
-  inline void ensure_parent_dir(const std::string& file) {
+  inline void ensureParentDir(const std::string& file) {
     std::filesystem::path p(file);
     std::error_code ec;
     std::filesystem::create_directories(p.parent_path(), ec);
   }
 
-  inline std::string channel_to_csv(const ant::Channel& ch) {
+  inline std::string channelToCsv(const ant::Channel& ch) {
     std::ostringstream oss;
     // cNum;use;cType;dNum;dType;tType;period;rfFreq;searchTimeout
     oss << static_cast<int>(ch.cNum) << ';'
@@ -168,14 +168,14 @@ namespace ant {
     return oss.str();
   }
 
-  inline bool parse_int(const std::string& s, int& out) {
+  inline bool parseInt(const std::string& s, int& out) {
     try { out = std::stoi(s); return true; } catch (...) { return false; }
   }
-  inline bool parse_ushort(const std::string& s, unsigned short& out) {
+  inline bool parseUshort(const std::string& s, unsigned short& out) {
     try { out = static_cast<unsigned short>(std::stoul(s)); return true; } catch (...) { return false; }
   }
 
-  inline bool csv_to_channel(const std::string& line, ant::Channel& ch) {
+  inline bool csvToChannel(const std::string& line, ant::Channel& ch) {
     std::istringstream iss(line);
     std::string tok;
     int field = 0, iTmp = 0;
@@ -183,15 +183,15 @@ namespace ant {
 
     while (std::getline(iss, tok, ';')) {
       switch (field) {
-        case 0: if (!parse_int(tok, iTmp)) return false; ch.cNum = static_cast<uint8_t>(iTmp); break;
-        case 1: if (!parse_int(tok, iTmp)) return false; ch.use = (iTmp != 0); break;
-        case 2: if (!parse_int(tok, iTmp)) return false; ch.cType = static_cast<uint8_t>(iTmp); break;
-        case 3: if (!parse_ushort(tok, usTmp)) return false; ch.dNum = static_cast<uint16_t>(usTmp); break;
-        case 4: if (!parse_int(tok, iTmp)) return false; ch.dType = static_cast<uint8_t>(iTmp); break;
-        case 5: if (!parse_int(tok, iTmp)) return false; ch.tType = static_cast<uint8_t>(iTmp); break;
-        case 6: if (!parse_ushort(tok, usTmp)) return false; ch.period = static_cast<unsigned short>(usTmp); break;
-        case 7: if (!parse_int(tok, iTmp)) return false; ch.rfFreq = static_cast<uint8_t>(iTmp); break;
-        case 8: if (!parse_int(tok, iTmp)) return false; ch.searchTimeout = static_cast<uint8_t>(iTmp); break;
+        case 0: if (!parseInt(tok, iTmp)) return false; ch.cNum = static_cast<uint8_t>(iTmp); break;
+        case 1: if (!parseInt(tok, iTmp)) return false; ch.use = (iTmp != 0); break;
+        case 2: if (!parseInt(tok, iTmp)) return false; ch.cType = static_cast<uint8_t>(iTmp); break;
+        case 3: if (!parseUshort(tok, usTmp)) return false; ch.dNum = static_cast<uint16_t>(usTmp); break;
+        case 4: if (!parseInt(tok, iTmp)) return false; ch.dType = static_cast<uint8_t>(iTmp); break;
+        case 5: if (!parseInt(tok, iTmp)) return false; ch.tType = static_cast<uint8_t>(iTmp); break;
+        case 6: if (!parseUshort(tok, usTmp)) return false; ch.period = static_cast<unsigned short>(usTmp); break;
+        case 7: if (!parseInt(tok, iTmp)) return false; ch.rfFreq = static_cast<uint8_t>(iTmp); break;
+        case 8: if (!parseInt(tok, iTmp)) return false; ch.searchTimeout = static_cast<uint8_t>(iTmp); break;
         default: break;
       }
       ++field;
@@ -199,27 +199,29 @@ namespace ant {
     return field >= 9;
   }
 
-  inline uint8_t next_free_channel_number() {
+  inline uint8_t nextFreeChannelNumber() {
     std::set<uint8_t> used;
     for (const auto& c : ant::channels) used.insert(c.cNum);
-    for (uint8_t n = 0; n < 8; ++n) {
-      if (!used.contains(n)) return n;
+    for (uint8_t n = MAX_SEARCH_CH; n < 8; ++n) {
+      if (!used.contains(n)) {
+        return n;
+      }
     }
     return ant::channels.empty()
       ? MAX_SEARCH_CH
       : std::min(MAX_SEARCH_CH, static_cast<uint8_t>(ant::channels.back().cNum + 1));
   }
 
-  inline bool channel_equals_id(const ant::Channel& c, uint16_t dNum, uint8_t dType, uint8_t tType) {
+  inline bool channelEqualsId(const ant::Channel& c, const uint16_t dNum, const uint8_t dType, const uint8_t tType) {
     return c.dNum == dNum && c.dType == dType && c.tType == tType;
   }
 
-  inline bool has_channel(uint16_t dNum, uint8_t dType, uint8_t tType) {
+  inline bool hasChannel(const uint16_t dNum, const uint8_t dType, const uint8_t tType) {
     return std::any_of(
       ant::channels.begin(),
       ant::channels.end(),
       [&](const ant::Channel& c){
-        return channel_equals_id(c, dNum, dType, tType);
+        return channelEqualsId(c, dNum, dType, tType);
       }
     );
   }
@@ -227,39 +229,25 @@ namespace ant {
   // Public API: add/save/load
 
   // Find channel config by number
-  inline const Channel* findChannelByNumber(uint8_t cNum) {
+  inline const Channel* findChannelByNumber(const uint8_t cNum) {
     const auto it = std::find_if(channels.begin(), channels.end(),
         [&](const Channel& ch){ return ch.cNum == cNum; });
     return (it != channels.end()) ? &(*it) : nullptr;
   }
 
-  inline void add_paired_channel(const uint16_t dNum, const uint8_t dType, const uint8_t tType) {
-    if (has_channel(dNum, dType, tType)) return;
-
-    ant::Channel ch{};
-    ch.use           = true;
-    ch.cNum          = next_free_channel_number();
-    ch.cType         = defaults().cType;
-    ch.dNum          = dNum;
-    ch.dType         = dType;
-    ch.tType         = tType;
-    ch.period        = defaults().period;
-    ch.rfFreq        = defaults().rfFreq;
-    ch.searchTimeout = defaults().searchTimeout;
-
-    ant::channels.push_back(ch);
-
-    std::ostringstream oss;
-    oss << "Added paired channel for Device #0x" << ant::toHexByte(static_cast<uint16_t>(dNum))
-        << " (Type 0x" << ant::toHexByte(dType) << ", Tx 0x" << ant::toHexByte(tType) << ")"
-        << " on Channel #" << static_cast<int>(ch.cNum);
-    ant::info(oss.str());
+  static Channel makeDedicatedFromTemplate(const uint8_t cNum, const Channel& tmpl, const ExtendedInfo& ext) {
+    Channel ch = tmpl;
+    ch.cNum  = cNum;
+    ch.use   = true;
+    ch.dNum  = ext.deviceId.number;
+    ch.dType = ext.deviceId.dType;
+    ch.tType = ext.deviceId.tType;
+    return ch;
   }
 
-
-  inline bool save_paired_channels() {
-    const auto& path = get_paired_store_path();
-    ensure_parent_dir(path);
+  inline bool savePairedChannels() {
+    const auto& path = getPairedStorePath();
+    ensureParentDir(path);
     std::ofstream out(path, std::ios::trunc);
     if (!out.is_open()) {
       ant::warn(std::string("Failed to open paired store for write: ") + path);
@@ -268,15 +256,15 @@ namespace ant {
     // Persist only concrete (non-wildcard) device channels
     for (const auto& ch : ant::channels) {
       if (ch.dNum == 0) continue;
-      out << channel_to_csv(ch) << "\n";
+      out << channelToCsv(ch) << "\n";
     }
     out.close();
     ant::info(std::string("Saved paired channels to ") + path);
     return true;
   }
 
-  inline bool load_paired_channels() {
-    const auto& path = get_paired_store_path();
+  inline bool loadPairedChannels() {
+    const auto& path = getPairedStorePath();
     std::ifstream in(path);
     if (!in.is_open()) {
       ant::warn(std::string("Paired channel store not found: ") + path);
@@ -284,11 +272,12 @@ namespace ant {
     }
     std::string line;
     int loaded = 0;
+    channels.clear();
     while (std::getline(in, line)) {
       if (line.empty()) continue;
       ant::Channel ch{};
-      if (csv_to_channel(line, ch)) {
-        if (!has_channel(ch.dNum, ch.dType, ch.tType)) {
+      if (csvToChannel(line, ch)) {
+        if (!hasChannel(ch.dNum, ch.dType, ch.tType)) {
           ant::channels.push_back(ch);
           ++loaded;
         }
@@ -309,21 +298,6 @@ namespace ant {
         << ":" << static_cast<int>(ext.deviceId.dType)
         << ":" << static_cast<int>(ext.deviceId.tType);
     return oss.str();
-  }
-
-  // Pair when seeing a valid Device Channel ID on a search channel
-  inline void ensurePairedFromExt(const uint8_t channel, const ExtendedInfo& ext) {
-    if (!ext.hasDeviceId) return;
-
-    const Channel* ch = findChannelByNumber(channel);
-    if (!ch || ch->dNum != 0) return;           // only pair on wildcard search channels
-
-    const std::string key = makeDeviceKey(ext);
-
-    if (pairedDevices.insert(key).second) {
-      add_paired_channel(ext.deviceId.number, ext.deviceId.dType, ext.deviceId.tType);
-      save_paired_channels();
-    }
   }
 
 } // namespace ant::config

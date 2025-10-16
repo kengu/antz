@@ -37,7 +37,6 @@ namespace ant {
     static MqttConfig mqttCfg;
     static MqttPublisher mqtt;
     static auto logLevel = LogLevel::Info;
-    static std::vector<AntProfile> deviceTypes;
     static auto outputFormat = OutputFormat::Text;
 
     // Epsilon constants for approximate comparisons
@@ -46,6 +45,7 @@ namespace ant {
 
     static DSIFramerANT *pclANT = nullptr;
     static DSISerialGeneric *pclSerial = nullptr;
+    static std::vector<AntProfile> searchTypes;
     static std::set<std::string> recentPageRequests;
     static std::map<std::string, std::set<uint8_t>> knownIndexes;
     static std::map<std::string, std::map<uint8_t, Device>> knownDevices;
@@ -63,6 +63,16 @@ namespace ant {
         PAGE_IDENTIFICATION_1,
         PAGE_IDENTIFICATION_2,
     };
+
+    void setChannelState(const uint8_t channel, const bool active, const ExtendedInfo ext)
+    {
+        channelStates[channel].active = active;
+        channelStates[channel].lastSeen = std::chrono::steady_clock::now();
+
+        if (ext.hasRssiValue) {
+            channelStates[channel].lastRssi = ext.rssi.value;
+        }
+    }
 
     inline bool operator==(const NameInfo& a, const NameInfo& b) {
         return a.uName == b.uName &&
@@ -108,7 +118,6 @@ namespace ant {
     static const std::map<uint16_t, std::string> manufacturerMap = {
         {1, "Garmin"},
     };
-
 
     void log(const LogLevel level, const std::string& message) {
         if (level < logLevel) return;
@@ -160,32 +169,10 @@ namespace ant {
     }
 
     void setSearch(const std::vector<AntProfile>& types){
-        if (types.empty()) {
-            channels = {
-                HRM_SEARCH_CH,
-                TRK_SEARCH_CH
-            };
-            return;
-        }
-        channels.clear();
-        for (const auto& type : types) {
-            switch (type) {
-            case AntProfile::HeartRate:
-                channels.push_back(HRM_SEARCH_CH);
-                info("Active search for device type [" + toAntProfileString(type) + "]");
-                break;
-            case AntProfile::AssetTracker:
-                channels.push_back(TRK_SEARCH_CH);
-                info("Active search for device type [" + toAntProfileString(type) + "]");
-                break;
-            default:
-                break;
-            }
-        }
-        deviceTypes = types;
+        searchTypes = types;
     }
 
-        // Allow choosing output format via programmatic setter only
+    // Allow choosing output format via programmatic setter only
     void setMqtt(const std::string& cnn) {
         if (!parseMqttConnectionString(cnn, mqttCfg))
         {
@@ -393,6 +380,26 @@ namespace ant {
         return ext.length > 0;
     }
 
+    AntProfile detectProfile(const UCHAR* d) {
+        const uint8_t* trailer = &d[10];
+
+        UCHAR deviceType = 0;
+
+        if (isDeviceChannelIdExt(d)) {
+            deviceType = trailer[2];
+        }
+
+        // Detect Asset Tracker pages
+        switch (deviceType){
+        case HRM_DEVICE_TYPE:
+            return AntProfile::HeartRate;
+        case ASSET_TRACKER_DEVICE_TYPE:
+            return AntProfile::AssetTracker;
+        default:
+            return AntProfile::Unknown;
+        }
+    }
+
     std::string describeAssetType(const uint8_t type) {
         switch (type) {
         case 0x00: return "Tracker";
@@ -423,9 +430,9 @@ namespace ant {
         const uint8_t* payload = &data[1];
         const uint8_t page = payload[0];
 
-        const bool isDevice = assetPages.contains(page);
+        const bool isAsset = assetPages.contains(page);
 
-        if (isDevice) {
+        if (isAsset) {
             device.index = payload[1] & 0x1F;
         }
 
@@ -502,7 +509,7 @@ namespace ant {
             default: break;
         }
 
-        return isDevice;
+        return isAsset;
     }
 
     std::string formatDeviceChannelID(const ExtendedInfo& ext) {
@@ -627,10 +634,14 @@ namespace ant {
             << " | Device Type: 0x" + toHexByte(ch.dType)
             << " | Tx Type: 0x" + toHexByte(ch.tType);
         info(oss.str());
+        setChannelState(ch.cNum, true, {});
         return true;
     }
 
     bool closeChannel(const uint8_t number) {
+        if (!channelStates[number].active){
+            return true;
+        }
         if (!pclANT) {
             error("Failed to close channel #"
                 + std::to_string(number)
@@ -648,13 +659,120 @@ namespace ant {
         }
 
         info("Channel #" + std::to_string(number) + " [CLOSED]");
+        setChannelState(number, false, {});
         return true;
+    }
+
+    bool ensureNewChannelForDevice(const uint8_t cNum, const ExtendedInfo& ext) {
+        // Require valid device id in the extended trailer
+        if (!ext.hasDeviceId) {
+            return false;
+        }
+
+        // Find the channel by number
+        const Channel* searchChPtr = findChannelByNumber(cNum);
+        if (!searchChPtr) {
+            warn("[ensureNewChannelForDevice] Search Channel #" + std::to_string(cNum) + " not found");
+            return false;
+        }
+
+        // Keep a VALUE COPY of the search channel to avoid
+        // pointer invalidation when we mutate the channels vector below.
+        const Channel searchCh = *searchChPtr;
+
+        // Only split from a wildcard search channel (device number == 0)
+        if (searchCh.dNum != 0) {
+            return false;
+        }
+
+        fine("[ensureNewChannelForDevice] Found search channel #" + std::to_string(searchCh.cNum));
+
+        // Do not add if already exist
+        if (hasChannel(ext.deviceId.number, ext.deviceId.dType, ext.deviceId.tType)) {
+            fine("[ensureNewChannelForDevice] Device 0x" + toHexByte(ext.deviceId.number) +" has dedicated channel, closing...");
+            closeChannel(searchCh.cNum);
+            return false;
+        }
+
+        // Choose profile template for dedicated channel
+        Channel tmpl;
+        const std::string deviceId = "0x" + toHexByte(ext.deviceId.number);
+        switch (static_cast<UCHAR>(ext.deviceId.dType)) {
+            case HRM_DEVICE_TYPE:
+                tmpl = HRM_SEARCH_CH;
+                break;
+            case ASSET_TRACKER_DEVICE_TYPE:
+                tmpl = TRK_SEARCH_CH;
+                break;
+            default:
+                warn("[ensureNewChannelForDevice] Search Channel #" + std::to_string(cNum) + ": Unknown device type "
+                    + "0x" + toHexByte(ext.deviceId.dType) + " for device " + deviceId);
+                return false;
+        }
+
+        const uint8_t newCNum = nextFreeChannelNumber();
+        if (newCNum == 0xFF || findChannelByNumber(newCNum)) {
+            warn("[ensureNewChannelForDevice] Search Channel #" + std::to_string(cNum) + ": No free ANT channels for dedicated link; keeping search only.");
+            return false;
+        }
+        fine("[ensureNewChannelForDevice] Search Channel #" +  std::to_string(cNum) + ": Found free channel #" + std::to_string(newCNum));
+
+        const Channel newCh = makeDedicatedFromTemplate(newCNum, tmpl, ext);
+
+        // 1) Close the search channel before opening the dedicated one
+        fine("[ensureNewChannelForDevice] Search Channel #" +  std::to_string(cNum) +  ": Closing search channel to open dedicated channel...");
+        if (!closeChannel(searchCh.cNum)) {
+            warn("[ensureNewChannelForDevice] Search Channel #" +  std::to_string(cNum) +  ": Failed to close search channel; aborting");
+            return false;
+        }
+        fine("[ensureNewChannelForDevice] Search Channel #" +  std::to_string(cNum) +  ": Closing search channel to open dedicated channel...DONE");
+
+        // 2) Open new dedicated channel for
+        channels.push_back(newCh); // This can reallocate; safe now because we use `searchCh` (value copy) later
+        bool newChOpened = false;
+        if (openChannel(newCh)) {
+            const std::string deviceKey = makeDeviceKey(ext);
+            knownDevices[deviceKey]; // mark as known
+            newChOpened = true;
+            fine("[ensureNewChannelForDevice] Search Channel #" +  std::to_string(cNum) +  ": Dedicated channel #"
+                 + std::to_string(newCh.cNum) + " opened for device " + deviceId);
+        } else {
+            std::erase_if(channels, [&](const Channel& c){ return c.cNum == newCh.cNum; });
+            warn("[ensureNewChannelForDevice] Search Channel #" +  std::to_string(cNum) + ": Failed to open dedicated channel. Aborting");
+        }
+
+        /*
+
+        // 3) Re-open the original search channel (always), using the SAFE COPY
+        fine("[CH] #" + std::to_string(searchCh.cNum) + ": Re-opening search channel for continued discovery...");
+        if (!openChannel(searchCh)) {
+            error("[CH] #" + std::to_string(searchCh.cNum) + ": Failed to re-open search channel");
+        } else {
+            fine("[CH] #" + std::to_string(searchCh.cNum) + ": Re-opening search channel for continued discovery...DONE");
+        }
+        */
+
+        return newChOpened;
     }
 
     bool startDiscovery() {
         info("Starting ANT+ discovery...");
 
-        load_paired_channels();
+        loadPairedChannels();
+        for (const auto& type : searchTypes) {
+            switch (type) {
+            case AntProfile::HeartRate:
+                channels.push_back(HRM_SEARCH_CH);
+                info("Active search for device type [" + toAntProfileString(type) + "]");
+                break;
+            case AntProfile::AssetTracker:
+                channels.push_back(TRK_SEARCH_CH);
+                info("Active search for device type [" + toAntProfileString(type) + "]");
+                break;
+            default:
+                break;
+            }
+        }
 
         if (!pclANT->SetNetworkKey(USER_NETWORK_NUM, USER_NETWORK_KEY, MESSAGE_TIMEOUT)) {
             error("SetNetworkKey failed");
@@ -670,13 +788,13 @@ namespace ant {
             openChannel(ch);
         }
 
-        info("Opening ANT channels...DONE");
+        fine("Opening ANT channels...DONE");
         if (!pclANT->RxExtMesgsEnable(TRUE)) {
             error("Failed to enable extended message format mode");
             return false;
         }
 
-        info("Starting ANT+ discovery...DONE");
+        fine("Starting ANT+ discovery...DONE");
         return true;
     }
 
@@ -712,7 +830,7 @@ namespace ant {
 
     void cleanup() {
         searching = false;
-        save_paired_channels();
+        savePairedChannels();
         if (mqttCfg.enabled) {
             mqtt.stop();
             ant::info("Stopped MQTT client");
@@ -726,20 +844,20 @@ namespace ant {
                 }
                 closeChannel(ch.cNum);
             }
-            info("Closing ANT channels...DONE");
+            fine("Closing ANT channels...DONE");
 
             info("ANT system reset...");
             if(!pclANT->ResetSystem()) {
                 error("Failed to reset ANT System");
             } else {
-                info("ANT system reset...DONE");
+                fine("ANT system reset...DONE");
             }
         }
 
         if (pclSerial) {
             info("Closing USB port...");
             pclSerial->Close();
-            info("Closing USB port...DONE");
+            fine("Closing USB port...DONE");
         }
 
     }
@@ -751,19 +869,15 @@ namespace ant {
     // Assumes Broadcast Data message
     void onBroadcastMessage(const UCHAR ucMessageID, const UCHAR* data, const UCHAR length) {
         const uint8_t channel = data[0];
+        if (!channelStates[channel].active){
+            return;
+        }
         std::ostringstream oss;
         oss << "[DUMP] Channel: " << static_cast<int>(channel)
             <<  " | Message ID: 0x" << toHexByte(ucMessageID);
 
         if (ExtendedInfo ext; parseExtendedInfo(data, length, ext)) {
-            channelStates[channel].active = true;
-            channelStates[channel].lastSeen = std::chrono::steady_clock::now();
-
-            if (ext.hasRssiValue) {
-                channelStates[channel].lastRssi = ext.rssi.value;
-            }
-
-
+            setChannelState(channel, true, ext);
             oss << " | Flags: 0x" << toHexByte(ext.flags);
             oss << " | " << formatDeviceChannelID(ext);
         } else {
@@ -1215,6 +1329,9 @@ namespace ant {
     }
 
     bool sendAcknowledgedRequestDataPage(const uint8_t channel, uint8_t* data) {
+        if (!channelStates[channel].active){
+            return false;
+        }
         constexpr u_int8_t maxAttempts = 5;
         const u_int8_t page = data[0];
         uint8_t retries = 0;
@@ -1234,7 +1351,7 @@ namespace ant {
 
             const UCHAR e = pclANT->GetLastError();
             oss << " | FAILED with 0x" << toHexByte(e)
-                << " (attempt " << retries+1 << " of " << maxAttempts <<")"
+                << " (attempt " << retries+1 << " of " << std::to_string(maxAttempts) <<")"
                 << " | " << "Raw Payload (0): " << toHex(data, 8);
             warn(oss.str());
 
@@ -1313,6 +1430,11 @@ namespace ant {
     }
 
     void requestAssetPages(const uint8_t channel, const Device& device) {
+
+        if (!channelStates[channel].active){
+            return;
+        }
+
         // Request asset name (0x10 and 0x11)
         if (shouldRequestPageAgain(device, PAGE_LOCATION_1)) {
             requestAssetIdentification(channel, device);
@@ -1720,11 +1842,11 @@ namespace ant {
     // - ANT+ Device Profile – Tracker Rev. 1.0 (Section 4.2, 4.3)
     // -----------------------------------------------------------------------------
     void onAssetTrackerMessage(const uint8_t* data, const UCHAR length) {
+        const uint8_t channel = data[0];
         const uint8_t page = data[1];
 
-        ExtendedInfo ext;
-        if (parseExtendedInfo(data, length, ext)) {
-            ensurePairedFromExt(data[0], ext);
+        if (ExtendedInfo ext; parseExtendedInfo(data, length, ext)) {
+            ensureNewChannelForDevice(channel, ext);
         }
 
         switch (page) {
@@ -1752,6 +1874,11 @@ namespace ant {
         // Assume standard ANT+ HRM always
         const uint8_t hr = static_cast<int>(payload[7]);
 
+        ExtendedInfo ext;
+        if (parseExtendedInfo(data, length, ext)) {
+            ensureNewChannelForDevice(channel, ext);
+        }
+
         const uint8_t flag = data[9];
         std::ostringstream oss;
         oss << "[CH] #" << std::to_string(channel) << ":"
@@ -1759,9 +1886,6 @@ namespace ant {
             << " Heart Rate: " << static_cast<int>(hr) << " bpm"
             << " | Flags: 0x" << toHexByte(flag);
 
-        ExtendedInfo ext;
-        parseExtendedInfo(data, length, ext);
-        ensurePairedFromExt(channel, ext);
 
         if (isDeviceChannelIdExt(data)) {
             oss << " | " << formatDeviceChannelID(ext);
@@ -1787,28 +1911,6 @@ namespace ant {
         requestPage(channel, PAGE_MANUFACTURER_IDENT, prefix);
         requestPage(channel, PAGE_PRODUCT_INFO, prefix);
     }
-
-
-    AntProfile detectProfile(const UCHAR* d) {
-        const uint8_t* trailer = &d[10];
-
-        uint8_t deviceType = 0;
-
-        if (isDeviceChannelIdExt(d)) {
-            deviceType = trailer[2];
-        }
-
-        // Detect Asset Tracker pages
-        switch (deviceType){
-        case HRM_DEVICE_TYPE:
-            return AntProfile::HeartRate;
-        case ASSET_TRACKER_DEVICE_TYPE:
-            return AntProfile::AssetTracker;
-        default:
-            return AntProfile::Unknown;
-        }
-    }
-
 
 
     void dispatchBroadcastDataMessage(const ANT_MESSAGE& msg, const UCHAR length) {

@@ -1,10 +1,11 @@
 #pragma once
 
-
+#include <chrono>
+#include <execinfo.h>
+#include <set>
 #include <string>
-#include <vector>
 #include "types.h"
-#include <usb_device_handle.hpp>
+#include <cstdint>
 
 namespace ant {
 
@@ -43,7 +44,7 @@ namespace ant {
     struct ChannelState {
         std::chrono::steady_clock::time_point lastSeen;
         int8_t lastRssi = 0;
-        bool active = true;
+        bool active = false;
     };
 
     // Enum for situation field in status byte
