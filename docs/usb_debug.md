@@ -51,5 +51,9 @@ Sometimes, you also need:
 sudo apt-get install libudev-dev
 ```
 
+### Issues on Linux
+Commit `fef5bb261b8c10c57f7aff9c067f9f418eece972` works on RPI4 when not.
+
+
 
 

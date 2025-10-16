@@ -134,6 +134,7 @@ set(SRC_FILES
     src/ant_device.h
     src/ant_profiles.h
     src/ant_constants.h
+    src/config.h
 )
 
 add_executable(ant_discovery ${SRC_FILES})
