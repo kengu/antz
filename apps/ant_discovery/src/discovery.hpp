@@ -4,6 +4,7 @@
 #include <execinfo.h>
 #include <set>
 #include <string>
+#include <vector>
 #include "types.h"
 #include <cstdint>
 
