@@ -79,6 +79,45 @@ cmake -B build/linux -S . -DANTZ_PLATFORM=linux -DANTZ_DISCOVERY=ON
 cmake --build build/linux --target ant_discovery
 ```
 
+## 📦 Building Debian Packages (Raspberry Pi 4)
+
+For production deployments on Raspberry Pi 4, you can build Debian packages that include systemd service integration:
+
+### Build the package natively on RPI4
+```sh
+./scripts/build-rpi4.sh
+```
+
+This creates a `.deb` package in `build-rpi4/` with:
+- Binary installed to `/usr/bin/antz`
+- Systemd service file at `/lib/systemd/system/antz.service`
+- Dependencies: `libmosquitto1`, `libusb-1.0-0`
+
+### Install and run as a service
+```sh
+# Install the package
+sudo dpkg -i build-rpi4/antz-*.deb
+
+# If missing dependencies, fix them with:
+sudo apt-get install -f
+
+# Enable and start the service
+sudo systemctl enable antz
+sudo systemctl start antz
+
+# Monitor logs
+sudo journalctl -u antz -f
+```
+
+### Automated GitHub releases
+Packages are automatically built via GitHub Actions when you push a tag:
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow (`.github/workflows/build-rpi4.yml`) runs on self-hosted RPI4 runners and publishes the `.deb` to GitHub Releases.
+
 # Migration Plan
 - `ant_discovery` will be migrated to `libs/antz_core`
 - Functionality in `discovery.cpp` is being split into modular components:

@@ -183,6 +183,7 @@ message(STATUS "ant_discovery output path: ${CMAKE_CURRENT_SOURCE_DIR}/bin")
 # Install rules
 install(TARGETS ant_discovery
     RUNTIME DESTINATION bin
+    RENAME antz
     COMPONENT applications
 )
 
