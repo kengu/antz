@@ -5,6 +5,8 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
+#include <optional>
 
 // ANT extended messaging allows for the transmitting device’s channel ID
 // (transmission type, device type and device number) to be passed to the

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "logger/antz_logger.h"
+#include <cstdarg>
 
 // -------------------------------------------------------------------
 // Rationale of antz_xmacro_logging.h
