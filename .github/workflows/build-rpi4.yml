@@ -1,0 +1,47 @@
+name: Build RPI4 Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-rpi4:
+    runs-on: [self-hosted, linux, ARM]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update -q -y
+        sudo apt-get install -q -y cmake build-essential libmosquitto-dev libusb-1.0-0-dev pkg-config
+
+    - name: Build package
+      run: |
+        echo "Building on RPI4..."
+        mkdir -p build-rpi4
+        cd build-rpi4
+        cmake .. \
+          -DANTZ_PLATFORM=linux \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/usr
+        make -j$(nproc)
+        cpack
+          
+    - name: Upload package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: antz-rpi4-deb
+        path: build-rpi4/*.deb
+        
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build-rpi4/*.deb
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,15 @@
+[Unit]
+Description=ANT+ Device Discovery Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/antz
+Restart=on-failure
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

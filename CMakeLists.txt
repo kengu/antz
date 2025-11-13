@@ -54,3 +54,24 @@ option(ANTZ_DISCOVERY "Include ant_discovery app" ON)
 if(ANTZ_DISCOVERY)
     add_subdirectory(apps/ant_discovery)
 endif()
+
+# CPack configuration for packaging
+set(CPACK_PACKAGE_NAME "antz")
+set(CPACK_PACKAGE_VENDOR "kengu")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "ANT+ device discovery and monitoring service")
+set(CPACK_PACKAGE_VERSION_MAJOR "0")
+set(CPACK_PACKAGE_VERSION_MINOR "1")
+set(CPACK_PACKAGE_VERSION_PATCH "0")
+set(CPACK_PACKAGE_CONTACT "kengu")
+
+# Debian/Ubuntu package configuration
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "kengu")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libmosquitto1, libusb-1.0-0")
+set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "armhf")
+
+# DEB generator
+set(CPACK_GENERATOR "DEB")
+
+include(CPack)

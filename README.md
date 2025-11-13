@@ -69,8 +69,8 @@ antz/
 
 ## 🛠 Development
 
-After first checkout you need to configure build with `cmake` for 
-the platform you are developing code for. If you are developing for 
+After first checkout you need to configure build with `cmake` for
+the platform you are developing code for. If you are developing for
 Mac, you should run the following command from the root of the repo;
 
 ```bash
@@ -84,6 +84,37 @@ cmake --build build/darwin --target full_sdk_build
 ```
 
 which builds binaries to `sdks/ANT-SDK_Mac.3.5/Bin`
+
+## 📦 Building Debian Packages for Raspberry Pi 4
+
+For Linux deployments (especially Raspberry Pi 4), you can build and install Debian packages:
+
+### Native build on RPI4
+```bash
+./scripts/build-rpi4.sh
+sudo dpkg -i build-rpi4/antz-*.deb
+```
+
+### Installing the package
+After installation, the service can be managed with systemd:
+```bash
+# Enable and start the service
+sudo systemctl enable antz
+sudo systemctl start antz
+
+# Check status and logs
+sudo systemctl status antz
+sudo journalctl -u antz -f
+```
+
+### Automated builds with GitHub Actions
+Packages are automatically built for RPI4 when you push a git tag:
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow runs on self-hosted RPI4 runners and creates a GitHub release with the `.deb` package attached.
 
 ## Apps 
 Each antz app is a concrete use case that uses antz to implement it. 
