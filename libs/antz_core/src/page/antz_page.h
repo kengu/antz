@@ -3,6 +3,8 @@
 #include <data/antz_data.h>
 #include <variant>
 #include <array>
+#include <cstdint>
+#include <optional>
 
 #include "profiles/antz_profile.h"
 #include "profiles/hrm/hrm_pages.h"

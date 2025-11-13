@@ -6,6 +6,8 @@
 #include <data/antz_data.h>
 #include <data/antz_bytes.h>
 #include <logger/antz_logger.h>
+#include <cstdint>
+#include <optional>
 
 namespace antz
 {
