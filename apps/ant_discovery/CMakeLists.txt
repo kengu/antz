@@ -179,3 +179,15 @@ set_target_properties(ant_discovery PROPERTIES
 )
 
 message(STATUS "ant_discovery output path: ${CMAKE_CURRENT_SOURCE_DIR}/bin")
+
+# Install rules
+install(TARGETS ant_discovery
+    RUNTIME DESTINATION bin
+    COMPONENT applications
+)
+
+# Install systemd service file
+install(FILES ${CMAKE_SOURCE_DIR}/conf/antz.service
+    DESTINATION lib/systemd/system
+    COMPONENT services
+)
