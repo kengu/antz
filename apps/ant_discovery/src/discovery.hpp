@@ -10,14 +10,6 @@
 
 namespace ant {
 
-    enum class LogLevel {
-        Fine,
-        Info,
-        Warn,
-        Error,
-        None = 256,
-    };
-
     enum class AntProfile {
         Unknown,
         HeartRate,
@@ -237,8 +229,8 @@ namespace ant {
     // -----
 
 
+
     void setFormat(OutputFormat fmt);
-    void setLogLevel(LogLevel level);
     void setSearch(const std::vector<AntProfile>& types);
     void setEpsLatLng(double meters);
     void setEpsHeading(double degrees);

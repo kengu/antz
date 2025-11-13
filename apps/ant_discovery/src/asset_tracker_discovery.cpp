@@ -53,7 +53,7 @@ void AssetTrackerDiscovery::handleMessage(const ANT_MESSAGE& msg, const uint8_t 
     if (hr < 30 || hr > 220) {
         std::ostringstream oss;
         oss << "[Asset] (Ignored) Implausible HR: " << static_cast<int>(hr) << " bpm";
-        info(oss.str());
+        ant::info(oss.str());
         return;
     }
 
@@ -71,7 +71,7 @@ void AssetTrackerDiscovery::handleMessage(const ANT_MESSAGE& msg, const uint8_t 
             if (ext.hasProximity) oss << " | Proximity: " << static_cast<int>(ext.threshold);
             oss << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
 
-            info(oss.str());
+            ant::info(oss.str());
         }
     }
 }

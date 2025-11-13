@@ -37,7 +37,7 @@ void HRMDiscovery::handleMessage(const ANT_MESSAGE& msg, const uint8_t length, E
     if (hr < 30 || hr > 220) {
         std::ostringstream oss;
         oss << "[HRM] (Ignored) Implausible HR: " << static_cast<int>(hr) << " bpm";
-        info(oss.str());
+        ant::info(oss.str());
         return;
     }
 
@@ -68,7 +68,7 @@ void HRMDiscovery::handleMessage(const ANT_MESSAGE& msg, const uint8_t length, E
 
             oss << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
 
-            info(oss.str());
+            ant::info(oss.str());
         }
     }
 }

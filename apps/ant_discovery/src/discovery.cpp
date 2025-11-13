@@ -22,6 +22,7 @@
 #include "asset_tracker_discovery.h"
 #include "config.h"
 #include "mqtt.h"
+#include "logging.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -36,7 +37,6 @@ namespace ant {
 
     static MqttConfig mqttCfg;
     static MqttPublisher mqtt;
-    static auto logLevel = LogLevel::Info;
     static auto outputFormat = OutputFormat::Text;
 
     // Epsilon constants for approximate comparisons
@@ -119,49 +119,6 @@ namespace ant {
         {1, "Garmin"},
     };
 
-    void log(const LogLevel level, const std::string& message) {
-        if (level < logLevel) return;
-
-        auto name = "";
-        switch (level) {
-        case LogLevel::Fine:  name = "[FINE]"; break;
-        case LogLevel::Info:  name = "[INFO]"; break;
-        case LogLevel::Warn:  name = "[WARN]"; break;
-        case LogLevel::Error: name = "[ERROR]"; break;
-        case LogLevel::None: name = "[NONE]"; break;
-        }
-
-        const auto now = std::chrono::system_clock::now();
-        const std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        const std::tm* tm_ptr = std::localtime(&now_c);
-        char timeBuf[20];
-        std::strftime(timeBuf, sizeof(timeBuf), "%F %T", tm_ptr);
-
-        std::cout << timeBuf << ": " << name << ": " << message << std::endl;
-    }
-
-    void fine(const std::string& message) {
-        log(LogLevel::Fine, message);
-    }
-
-    void info(const std::string& message) {
-        log(LogLevel::Info, message);
-    }
-
-    void warn(const std::string& message) {
-        log(LogLevel::Warn, message);
-    }
-
-    void error(const std::string& message) {
-        log(LogLevel::Error, message);
-    }
-
-    // Allow choosing verbosity of logging
-    void setLogLevel(const LogLevel level)  {
-        logLevel = level;
-        fine("Setting log level to [" + std::to_string(static_cast<int>(level)) + "]");
-    }
-
     // Allow choosing output format via programmatic setter only
     void setFormat(const OutputFormat fmt) {
         outputFormat = fmt;
@@ -233,18 +190,6 @@ namespace ant {
                 << std::setw(4) << std::setfill('0')
                 << static_cast<int>(d[i]) << " ";
         }
-        return oss.str();
-    }
-
-    std::string toHexByte(const uint8_t byte) {
-        std::ostringstream oss;
-        oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
-        return oss.str();
-    }
-
-    std::string toHexByte(const uint16_t byte) {
-        std::ostringstream oss;
-        oss << std::hex << std::uppercase << std::setw(4) << std::setfill('0') << static_cast<int>(byte);
         return oss.str();
     }
 
