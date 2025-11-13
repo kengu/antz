@@ -69,7 +69,16 @@ set(CPACK_DEBIAN_PACKAGE_MAINTAINER "kengu")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libmosquitto1, libusb-1.0-0")
 set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "armhf")
+
+# Auto-detect architecture for ARM systems
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "armv7l")
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "armhf")
+else()
+    # Default to native architecture detection by CPack
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "")
+endif()
 
 # Post-installation script to reload udev rules
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_SOURCE_DIR}/packaging/linux/debian/postinst")
