@@ -85,19 +85,22 @@ cmake --build build/darwin --target full_sdk_build
 
 which builds binaries to `sdks/ANT-SDK_Mac.3.5/Bin`
 
-## 📦 Building Debian Packages for Raspberry Pi 4
+## 📦 Installing on Raspberry Pi 4
 
-For Linux deployments (especially Raspberry Pi 4), you can build and install Debian packages:
+### Quick install from GitHub Releases
+The easiest way to install on RPI4 is to download the latest pre-built package:
 
-### Native build on RPI4
 ```bash
-./scripts/build-rpi4.sh
-sudo dpkg -i build-rpi4/antz-*.deb
-```
+# Download latest release (replace VERSION with actual version, e.g., v0.1.0)
+VERSION=v0.1.0
+wget https://github.com/kengu/antz/releases/download/${VERSION}/antz-0.1.0-Linux.deb
 
-### Installing the package
-After installation, the service can be managed with systemd:
-```bash
+# Install the package
+sudo dpkg -i antz-0.1.0-Linux.deb
+
+# If missing dependencies, fix them with:
+sudo apt-get install -f
+
 # Enable and start the service
 sudo systemctl enable antz
 sudo systemctl start antz
@@ -107,14 +110,35 @@ sudo systemctl status antz
 sudo journalctl -u antz -f
 ```
 
-### Automated builds with GitHub Actions
-Packages are automatically built for RPI4 when you push a git tag:
+The package automatically installs:
+- Binary at `/usr/bin/antz`
+- Systemd service at `/lib/systemd/system/antz.service`
+- udev rules at `/lib/udev/rules.d/99-antz.rules` (for ANT+ USB access)
+
+### Building from source on RPI4
+If you want to build the package yourself:
+
+```bash
+# First time setup: install all dependencies
+./scripts/configure-rpi4.sh
+
+# Build the package
+./scripts/build-rpi4.sh
+
+# Install and run
+sudo dpkg -i build-rpi4/antz-*.deb
+sudo systemctl enable antz
+sudo systemctl start antz
+```
+
+### For developers: Creating releases
+Packages are automatically built via GitHub Actions when you push a git tag:
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The workflow runs on self-hosted RPI4 runners and creates a GitHub release with the `.deb` package attached.
+The workflow runs on self-hosted RPI4 runners and publishes the `.deb` to GitHub Releases.
 
 ## Apps 
 Each antz app is a concrete use case that uses antz to implement it. 

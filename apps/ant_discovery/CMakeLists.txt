@@ -188,7 +188,13 @@ install(TARGETS ant_discovery
 )
 
 # Install systemd service file
-install(FILES ${CMAKE_SOURCE_DIR}/conf/antz.service
+install(FILES ${CMAKE_SOURCE_DIR}/packaging/linux/conf/antz.service
     DESTINATION lib/systemd/system
     COMPONENT services
+)
+
+# Install udev rules for ANT+ USB dongles
+install(FILES ${CMAKE_SOURCE_DIR}/packaging/linux/conf/99-antz.rules
+    DESTINATION lib/udev/rules.d
+    COMPONENT udev
 )

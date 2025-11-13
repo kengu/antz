@@ -79,26 +79,20 @@ cmake -B build/linux -S . -DANTZ_PLATFORM=linux -DANTZ_DISCOVERY=ON
 cmake --build build/linux --target ant_discovery
 ```
 
-## 📦 Building Debian Packages (Raspberry Pi 4)
+## 📦 Installing on Raspberry Pi 4
 
-For production deployments on Raspberry Pi 4, you can build Debian packages that include systemd service integration:
+### Quick install from GitHub Releases (Recommended)
+Download and install the latest pre-built package directly:
 
-### Build the package natively on RPI4
 ```sh
-./scripts/build-rpi4.sh
-```
+# Download latest release (replace VERSION with actual version, e.g., v0.1.0)
+VERSION=v0.1.0
+wget https://github.com/kengu/antz/releases/download/${VERSION}/antz-0.1.0-Linux.deb
 
-This creates a `.deb` package in `build-rpi4/` with:
-- Binary installed to `/usr/bin/antz`
-- Systemd service file at `/lib/systemd/system/antz.service`
-- Dependencies: `libmosquitto1`, `libusb-1.0-0`
-
-### Install and run as a service
-```sh
 # Install the package
-sudo dpkg -i build-rpi4/antz-*.deb
+sudo dpkg -i antz-0.1.0-Linux.deb
 
-# If missing dependencies, fix them with:
+# Fix missing dependencies if needed
 sudo apt-get install -f
 
 # Enable and start the service
@@ -109,7 +103,36 @@ sudo systemctl start antz
 sudo journalctl -u antz -f
 ```
 
-### Automated GitHub releases
+The package includes:
+- Binary installed to `/usr/bin/antz`
+- Systemd service file at `/lib/systemd/system/antz.service`
+- udev rules at `/lib/udev/rules.d/99-antz.rules` (automatic USB permissions)
+- Dependencies: `libmosquitto1`, `libusb-1.0-0`
+
+### Building from source on RPI4
+If you prefer to build the package yourself:
+
+```sh
+# First time setup: install all dependencies
+./scripts/configure-rpi4.sh
+
+# Build the package
+./scripts/build-rpi4.sh
+
+# Install and run
+sudo dpkg -i build-rpi4/antz-*.deb
+sudo systemctl enable antz
+sudo systemctl start antz
+```
+
+The `configure-rpi4.sh` script will:
+- Install build tools (cmake, gcc, etc.)
+- Install runtime dependencies (libusb, libmosquitto)
+- Set up USB permissions for ANT+ dongles
+- Create udev rules for automatic device access
+- Check for ANT+ USB stick presence
+
+### For developers: Creating releases
 Packages are automatically built via GitHub Actions when you push a tag:
 ```sh
 git tag v0.1.0
