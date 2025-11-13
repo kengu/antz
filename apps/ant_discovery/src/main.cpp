@@ -1,5 +1,3 @@
-#include "discovery.hpp"
-#include "types.h"
 #include <execinfo.h>
 #include "usb_checker.cpp"
 
@@ -12,6 +10,11 @@
 #include <unistd.h>
 #include <usb_device_handle.hpp>
 #include "dsi_serial_generic.hpp"
+
+#include "types.h"
+#include "logging.h"
+#include "discovery.hpp"
+
 
 void print_stacktrace() {
     constexpr int max_frames = 64;

@@ -43,32 +43,32 @@ public:
     bool setupChannel() const {
         // Sample setup logic for the profile channel, you can add more steps as needed.
         if (!ant_->AssignChannel(channel_, channelType_, USER_NETWORK_NUM, MESSAGE_TIMEOUT)) {
-            severe("[Profile] Failed to assign channel");
+            ant::error("[Profile] Failed to assign channel");
             return false;
         }
 
         if (!ant_->SetChannelID(channel_, 0, deviceType_, TRANSMISSION_TYPE_WILDCARD, MESSAGE_TIMEOUT)) {
-            severe("[Profile] Failed to set channel ID");
+            ant::error("[Profile] Failed to set channel ID");
             return false;
         }
 
         if (!ant_->SetChannelPeriod(channel_, channelPeriod_, MESSAGE_TIMEOUT)) {
-            severe("[Profile] Failed to set channel period");
+            ant::error("[Profile] Failed to set channel period");
             return false;
         }
 
         if (!ant_->SetChannelRFFrequency(channel_, channelRFFrequency_, MESSAGE_TIMEOUT)) {
-            severe("[Profile] Failed to set channel RF frequency");
+            ant::error("[Profile] Failed to set channel RF frequency");
             return false;
         }
 
         if (!ant_->SetChannelSearchTimeout(channel_, searchTimeout_, MESSAGE_TIMEOUT)) {
-            severe("[Profile] Failed to set channel search timeout");
+            ant::error("[Profile] Failed to set channel search timeout");
             return false;
         }
 
         if (!ant_->OpenChannel(channel_, MESSAGE_TIMEOUT)) {
-            severe("[Profile] Failed to open channel");
+            ant::error("[Profile] Failed to open channel");
             return false;
         }
 
@@ -79,7 +79,7 @@ public:
         if (ant_) {
             std::ostringstream oss;
             oss << "[Profile] Closing ANT channel " << std::dec << channel_ << "...";
-            info(oss.str());
+            ant::info(oss.str());
             ant_->CloseChannel(channel_);
             ant_->UnAssignChannel(channel_);
         }
