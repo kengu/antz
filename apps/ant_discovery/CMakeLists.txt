@@ -174,16 +174,18 @@ endif()
 target_link_libraries(ant_discovery PRIVATE ${ANT_SDK_LIB})
 
 # Output to monorepo-idiomatic location (e.g., apps/ant_discovery/bin)
+# and set the binary name to 'antz' for installation
 set_target_properties(ant_discovery PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"
+    OUTPUT_NAME antz
 )
 
 message(STATUS "ant_discovery output path: ${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 # Install rules
+
 install(TARGETS ant_discovery
     RUNTIME DESTINATION bin
-    RENAME antz
     COMPONENT applications
 )
 
