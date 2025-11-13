@@ -7,6 +7,7 @@ Copyright (c) Dynastream Innovations Inc. 2016
 All rights reserved.
 */
 #include <stdio.h>
+#include <cstdlib>
 #include <assert.h>
 
 #include "demo.h"
