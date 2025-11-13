@@ -1,0 +1,3 @@
+# udev rules for ANT+ USB dongles (Dynastream/Garmin)
+# Allows all users to access ANT+ USB sticks
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0fcf", ATTRS{idProduct}=="1009", MODE="0666"

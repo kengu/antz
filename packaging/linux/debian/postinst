@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+# Reload udev rules after installation
+if [ -x /bin/udevadm ]; then
+    udevadm control --reload-rules || true
+    udevadm trigger --subsystem-match=usb || true
+fi
+
+#DEBHELPER#
+
+exit 0

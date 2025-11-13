@@ -71,6 +71,9 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "armhf")
 
+# Post-installation script to reload udev rules
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_SOURCE_DIR}/packaging/linux/debian/postinst")
+
 # DEB generator
 set(CPACK_GENERATOR "DEB")
 
