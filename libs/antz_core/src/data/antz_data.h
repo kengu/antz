@@ -135,7 +135,7 @@ struct ant_data_t {
 
 namespace antz
 {
-    const char* format_ext_flags(u_int8_t flags);
+    const char* format_ext_flags(uint8_t flags);
     const char* format_device_channel_id(const ant_ext_fields_t& ext);
 
     /**

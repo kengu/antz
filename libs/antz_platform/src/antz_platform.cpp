@@ -7,6 +7,8 @@
 #include <antz_context.h>
 #include <antz_hal.h>
 #include <vector>
+#include <algorithm>
+#include <optional>
 
 struct antz_channel {
     antz_hal_channel_t* hal;
