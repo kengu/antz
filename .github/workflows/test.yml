@@ -27,11 +27,13 @@ jobs:
 
       # Tests first, so a decoding regression reports as one even if the
       # application build fails for an unrelated reason.
+      # antz_tests depends on every test executable, so a new test needs no
+      # change here. Naming one target is how format_test silently did not run.
       - name: Build tests
-        run: cmake --build build --target antz_decode_test -j"$(nproc)"
+        run: cmake --build build --target antz_tests -j"$(nproc)"
 
       - name: Run tests
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --no-tests=error
 
       # The RPI4 workflow only builds on a tag, so without this a compile
       # break in discovery.cpp would go unnoticed until release.

@@ -251,6 +251,11 @@ foreach(group
     add_test(NAME ${group} COMMAND antz_decode_test ${group})
 endforeach()
 
+# One target that builds every test executable, so CI does not name them
+# individually — a workflow that builds one target and runs ctest reports a
+# missing binary as "Not Run", which is a green-looking way to skip a suite.
+add_custom_target(antz_tests DEPENDS antz_decode_test antz_format_test)
+
 foreach(group
         format.checker
         format.hrm_json
