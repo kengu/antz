@@ -25,53 +25,39 @@
 // -------------------------------------------------------------------------
 
 bool AssetTrackerDiscovery::accept(const ANT_MESSAGE& msg, const uint8_t length, ExtendedInfo& ext) {
-    if (msg.ucMessageID == MESG_BROADCAST_DATA_ID ||
-        msg.ucMessageID == MESG_EXT_BROADCAST_DATA_ID) {
-
-        const uint8_t* d = msg.aucData;
-
-        if (length >= 10) {
-            // Detect Asset Tracker pages
-            if (d[0] == PAGE_LOCATION_1 || d[0] == PAGE_LOCATION_2 ||
-                d[0] == PAGE_IDENTIFICATION_1 || d[0] == PAGE_IDENTIFICATION_2 ||
-                d[0] == PAGE_NO_ASSETS || d[0] == PAGE_DISCONNECT || d[0] == PAGE_MANUFACTURER_IDENT ||
-                d[0] == PAGE_PRODUCT_INFO || d[0] == PAGE_BATTERY_STATUS) {
-                return true;
-            }
-        }
+    if (msg.ucMessageID != MESG_BROADCAST_DATA_ID &&
+        msg.ucMessageID != MESG_EXT_BROADCAST_DATA_ID) {
+        return false;
     }
-    return false;
+    if (length < 10) {
+        return false;
+    }
+    const uint8_t page = msg.aucData[0];
+    return page == PAGE_LOCATION_1 || page == PAGE_LOCATION_2 ||
+           page == PAGE_IDENTIFICATION_1 || page == PAGE_IDENTIFICATION_2 ||
+           page == PAGE_NO_ASSETS || page == PAGE_DISCONNECT ||
+           page == PAGE_MANUFACTURER_IDENT || page == PAGE_PRODUCT_INFO ||
+           page == PAGE_BATTERY_STATUS;
 }
 
-// Handle the incoming message for the AssetTracker profile
+// Not implemented. The working Asset Tracker decoder is in discovery.cpp —
+// parseDevice(), decodeSituation() and the page handlers — and porting it here
+// is the DiscoveryMachine migration, not a gap to be filled in passing.
+//
+// This body previously held a copy of the HRM decoder: it read byte 8 as a
+// heart rate and byte 9-10 as a device id, on pages that carry neither. It
+// never ran, because nothing instantiates this class in the built binary, but
+// it read as working code and would have been trusted by whoever wired the
+// machine up. An explicit refusal is safer than a plausible wrong answer.
 void AssetTrackerDiscovery::handleMessage(const ANT_MESSAGE& msg, const uint8_t length, ExtendedInfo& ext) {
-    const uint8_t* d = msg.aucData;
+    (void)msg;
+    (void)length;
+    (void)ext;
 
-    // Assume standard ANT+ AssetTracker always
-    const uint8_t hr = static_cast<int>(d[8]);
-
-    if (hr < 30 || hr > 220) {
-        std::ostringstream oss;
-        oss << "[Asset] (Ignored) Implausible HR: " << static_cast<int>(hr) << " bpm";
-        ant::info(oss.str());
-        return;
-    }
-
-    {
-        std::ostringstream oss;
-        oss << "Heart Rate: " << static_cast<int>(hr) << " bpm";
-
-        if (length >= 11) {
-            const uint16_t devId = d[9] | (d[10] << 8);
-            uint8_t flags = 0;
-
-            oss << " | Trailer bytes used: " << static_cast<int>(ext.length);
-            oss << " | "<< formatDeviceInfo(devId, ext.dType, ext.tType);
-            if (ext.hasRssi) oss << " | RSSI: " << static_cast<int>(ext.rssi) << " dBm";
-            if (ext.hasProximity) oss << " | Proximity: " << static_cast<int>(ext.threshold);
-            oss << " | Flags: 0x" << std::hex << static_cast<int>(flags) << std::dec;
-
-            ant::info(oss.str());
-        }
+    static bool warned = false;
+    if (!warned) {
+        warned = true;
+        ant::warn("[Asset] AssetTrackerDiscovery::handleMessage is unimplemented; "
+                  "the live decoder is discovery.cpp");
     }
 }

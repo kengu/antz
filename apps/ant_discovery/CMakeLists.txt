@@ -123,19 +123,40 @@ else ()
     message(FATAL_ERROR "Unsupported platform: ${ANTZ_PLATFORM}")
 endif()
 
+# The built application. discovery.cpp is the live decoder: main.cpp drives it
+# directly, and everything the Debian package does goes through it.
 set(SRC_FILES
     src/main.cpp
     src/mqtt.h
     src/usb_checker.cpp
     src/discovery.cpp
-    src/hrm_discovery.cpp
-    src/asset_tracker_discovery.cpp
     src/logging.h
     src/ant_device.h
     src/ant_profiles.h
     src/ant_constants.h
     src/config.h
 )
+
+# The DiscoveryMachine architecture that will replace the above. Deliberately
+# not in SRC_FILES and not built:
+#
+#   src/main_new.cpp              entry point
+#   src/discovery_machine.cpp/.h  channel and profile orchestration
+#   src/profile_discovery.h       the per-profile interface
+#   src/hrm_discovery.cpp         HRM profile   — complete
+#   src/asset_tracker_discovery.cpp  Asset Tracker profile — a stub; the
+#                                 working decoder is still discovery.cpp
+#
+# hrm_discovery.cpp and asset_tracker_discovery.cpp were in SRC_FILES and
+# compiled into the shipped binary, where nothing instantiated either class.
+# Their headers are still included by discovery.cpp, which uses the page
+# constants they declare but neither class — so the headers stay and the
+# translation units go. Moving those constants into ant_constants.h would let
+# the profile headers become purely part of the new architecture; that is a
+# change to the live decoder's include graph and is left for the migration.
+#
+# Because these files are unbuilt they are also unchecked, and will rot until
+# the migration resumes.
 
 add_executable(ant_discovery ${SRC_FILES})
 

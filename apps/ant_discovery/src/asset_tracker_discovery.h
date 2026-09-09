@@ -83,7 +83,7 @@ constexpr UCHAR PAGE_DISCONNECT = 0x20;
 class AssetTrackerDiscovery final : public ProfileDiscovery {
 public:
     explicit AssetTrackerDiscovery(DSIFramerANT *ant) : ProfileDiscovery(
-        AntProfile::HeartRate, ant,
+        AntProfile::AssetTracker, ant,
         ASSET_TRACKER_CHANNEL,
         ASSET_TRACKER_CHANNEL_TYPE,
         ASSET_TRACKER_CHANNEL_PERIOD,
