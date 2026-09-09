@@ -353,10 +353,20 @@ namespace ant {
         }
     }
 
-    // Extracts the 'situation' field (bits 5–7) from a status byte (Data Page 1)
+    // Extracts the 'situation' field from a Data Page 1 status byte.
+    //
+    // TRK Device Profile Rev 1.0, Table 7-4: situation is bits 0:2 of the
+    // status byte. Table 7-5 defines values 0-4 for a Dog asset and reserves
+    // the rest; an Asset Tracker asset carries no situation and the whole
+    // status byte reads 0xFF, which is why the sentinel is on the byte and
+    // not on the 3-bit field it could never fit in.
     AssetSituation decodeSituation(const uint8_t statusByte) {
         if (statusByte == 0xFF) return AssetSituation::Undefined;
-        return static_cast<AssetSituation>((statusByte >> 5) & 0x07);
+        const uint8_t value = statusByte & 0x07;
+        if (value > static_cast<uint8_t>(AssetSituation::Unknown)) {
+            return AssetSituation::Undefined;
+        }
+        return static_cast<AssetSituation>(value);
     }
 
     std::string toAssetSituationString(const AssetSituation s) {
@@ -408,14 +418,17 @@ namespace ant {
                 const float bearingBradians = static_cast<float>(payload[4]) / 256.0f * 2.0f * static_cast<float>(M_PI);
                 device.headingDegrees = bearingBradians * (180.0f / static_cast<float>(M_PI));
 
+                // Table 7-4: situation 0:2, low battery 3, GPS lost 4,
+                // communication lost 5, remove 6, reserved 7.
                 const uint8_t status = payload[5];
-                device.gpsLost    = status & 0x01;
-                device.commsLost  = status & 0x02;
-                device.remove     = status & 0x04;
+                device.situation  = decodeSituation(status);
                 device.lowBattery = status & 0x08;
-                device.situation = decodeSituation(status);
+                device.gpsLost    = status & 0x10;
+                device.commsLost  = status & 0x20;
+                device.remove     = status & 0x40;
 
-                // Gety lower nibble of the asset’s current latitude.
+                // Table 7-3: bytes 6-7 carry latitude bits 0:15. The upper
+                // half arrives on page 2, so hold this until it does.
                 const uint16_t lat = parse_u_int16_t(payload,6);
                 auto& latitudes = knownLatitudes[knownKey];
                 latitudes[device.index] = lat;
@@ -425,11 +438,18 @@ namespace ant {
             case PAGE_LOCATION_2: {
                 auto& latitudes = knownLatitudes[knownKey];
                 const auto lower = latitudes[device.index];
-                const uint32_t lat = payload[3] << 24 | payload[2]  << 16 | lower;
-                const uint32_t lon = parse_u_int32_t(payload, 4);
+                // Section 8.1: semicircles are signed, two's complement,
+                // degrees = semicircles / 2^31 * 180. Read as unsigned and
+                // every position south of the equator or west of Greenwich
+                // decodes as a large positive angle.
+                const auto lat = static_cast<int32_t>(
+                    static_cast<uint32_t>(payload[3]) << 24 |
+                    static_cast<uint32_t>(payload[2]) << 16 | lower);
+                const auto lon = static_cast<int32_t>(parse_u_int32_t(payload, 4));
 
-                device.lat = lat * (180.0 / 0x80000000);
-                device.lon = lon * (180.0 / 0x80000000);
+                constexpr double kSemicirclesToDegrees = 180.0 / 2147483648.0;
+                device.lat = lat * kSemicirclesToDegrees;
+                device.lon = lon * kSemicirclesToDegrees;
 
                 break;
             }

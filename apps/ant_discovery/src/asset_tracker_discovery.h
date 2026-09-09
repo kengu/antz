@@ -74,18 +74,9 @@ constexpr UCHAR PAGE_DISCONNECT = 0x20;
 
 // Data Page 33 – 63 are reserved for future main data page definitions.
 
-// Enum for situation field in status byte
-enum class AssetSituation {
-    Undefined = 255,
-    Unknown = 0,
-    OnPoint = 1,
-    Treeing = 2,
-    Running = 3,
-    Caught = 4,
-    Barking = 5,
-    Training = 6,
-    Hunting = 7
-};
+// AssetSituation lives in discovery.hpp, matching TRK Device Profile
+// Rev 1.0 Table 7-5. An earlier duplicate here numbered the values from a
+// different table and disagreed with the spec on every one of them.
 
 // Data Page Number = 70 (0x46).
 

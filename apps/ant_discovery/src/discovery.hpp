@@ -40,7 +40,9 @@ namespace ant {
         bool active = false;
     };
 
-    // Enum for situation field in status byte
+    // Situation field of the Data Page 1 status byte, bits 0:2.
+    // TRK Device Profile Rev 1.0, Table 7-5. Values apply to a Dog asset;
+    // an Asset Tracker asset reports Undefined.
     enum class AssetSituation {
         Sitting = 0,
         Moving = 1,
