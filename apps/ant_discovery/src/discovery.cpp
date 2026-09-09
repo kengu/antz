@@ -345,10 +345,13 @@ namespace ant {
         }
     }
 
-    std::string describeAssetType(const uint8_t type) {
-        switch (type) {
-        case 0x00: return "Tracker";
-        case 0x01: return "Dog Collar";
+    // Asset Type, TRK Device Profile Rev 1.0 Table 7-9. Spec wording, so a
+    // reader can match the label to the table.
+    std::string describeAssetType(const std::optional<uint8_t> type) {
+        if (!type.has_value()) return "Unknown";
+        switch (*type) {
+        case 0x00: return "Asset Tracker";
+        case 0x01: return "Dog";
         default: return "Reserved";
         }
     }
@@ -1097,7 +1100,13 @@ namespace ant {
                 oss << R"("index":)" << static_cast<int>(device->index) << ",";
                 oss << R"("color":"0x)" << static_cast<int>(device->color) << "\",";
                 oss << R"("id":"0x)" << toHexByte(device->ext.deviceId.number) << "\",";
-                oss << R"("type":"0x)" << toHexByte(device->ext.deviceId.dType) << "\",";
+                oss << R"("deviceType":"0x)" << toHexByte(device->ext.deviceId.dType) << "\",";
+                if (device->aType.has_value()) {
+                    oss << R"("assetType":)" << static_cast<int>(*device->aType) << ",";
+                } else {
+                    oss << R"("assetType":null,)";
+                }
+                oss << R"("assetTypeName":")" << describeAssetType(device->aType) << "\",";
                 oss << R"("lat":)" << device->lat << ",";
                 oss << R"("long":)" << device->lon << ",";
                 oss << R"("distance":)" << device->distance << ",";
@@ -1117,12 +1126,13 @@ namespace ant {
             }
             case OutputFormat::CSV: {
                 std::ostringstream oss;
-                // CSV: page,ts,name,index,deviceId,deviceType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove,age,[flags,text]
+                // CSV: page,ts,name,index,deviceId,deviceType,assetType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove,age,[flags,text]
                 oss << '"' << formatTimestamp(device->ts) << '"' << ","
                     << '"' << (!device->name.fName.empty() ? device->name.fName : device->name.uName) << '"' << ","
                     << static_cast<int>(device->index) << ","
                     << "0x" << toHexByte(device->ext.deviceId.number) << ","
                     << "0x" << toHexByte(device->ext.deviceId.dType) << ","
+                    << (device->aType.has_value() ? std::to_string(static_cast<int>(*device->aType)) : std::string()) << ","
                     << device->lat << ","
                     << device->lon << ","
                     << device->distance << ","

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <optional>
 #include <execinfo.h>
 #include <set>
 #include <string>
@@ -157,7 +158,12 @@ namespace ant {
     struct Device {
         uint8_t index{};
         uint8_t color = 0;
-        uint8_t aType = 0;
+
+        // Asset Type from Identification Page 2 (Table 7-9): 0 Asset Tracker,
+        // 1 Dog, 2-255 reserved. Optional because that page arrives only on
+        // request — before it does, the type is unknown, and a plain u8
+        // default of 0 would report every asset as an Asset Tracker.
+        std::optional<uint8_t> aType{};
 
         NameInfo name{};
         uint16_t distance = 0;
