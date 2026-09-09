@@ -235,6 +235,12 @@ add_executable(antz_decode_test tests/decode_test.cpp)
 target_include_directories(antz_decode_test PRIVATE src)
 target_compile_features(antz_decode_test PRIVATE cxx_std_20)
 
+# The fragment builders need the app's structs, so this one also needs the ANT
+# SDK headers for its typedefs — headers only, nothing is linked.
+add_executable(antz_format_test tests/format_test.cpp)
+target_include_directories(antz_format_test PRIVATE src ${ANT_SDK_INCLUDE_DIRS})
+target_compile_features(antz_format_test PRIVATE cxx_std_20)
+
 # One CTest entry per group rather than one for the binary: a failure then
 # names the part of the spec that broke, and a group can be run alone.
 foreach(group
@@ -243,4 +249,14 @@ foreach(group
         tracker.units
         hrm.page_and_rate)
     add_test(NAME ${group} COMMAND antz_decode_test ${group})
+endforeach()
+
+foreach(group
+        format.checker
+        format.hrm_json
+        format.hrm_csv
+        format.device_json
+        format.device_csv
+        format.escaping)
+    add_test(NAME ${group} COMMAND antz_format_test ${group})
 endforeach()

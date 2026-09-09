@@ -23,6 +23,7 @@
 #include "config.h"
 #include "mqtt.h"
 #include "logging.h"
+#include "ant_format.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -345,33 +346,11 @@ namespace ant {
         }
     }
 
-    // Asset Type, TRK Device Profile Rev 1.0 Table 7-9. Spec wording, so a
-    // reader can match the label to the table.
-    std::string describeAssetType(const std::optional<uint8_t> type) {
-        if (!type.has_value()) return "Unknown";
-        switch (*type) {
-        case 0x00: return "Asset Tracker";
-        case 0x01: return "Dog";
-        default: return "Reserved";
-        }
-    }
-
     // See ant_decode.h for the bit layout and its citations.
     AssetSituation decodeSituation(const uint8_t statusByte) {
         return decode::situation(statusByte);
     }
 
-    std::string toAssetSituationString(const AssetSituation s) {
-        switch (s) {
-            case AssetSituation::Undefined: return "Undefined";
-            case AssetSituation::Unknown:   return "Unknown";
-            case AssetSituation::Pointed:   return "On Point";
-            case AssetSituation::Treed:     return "Treed";
-            case AssetSituation::Moving:    return "Moving";
-            case AssetSituation::Sitting:   return "Sitting";
-            default:                        return "Invalid";
-        }
-    }
 
     bool parseDevice(const uint8_t* data, const uint8_t length, Device& device){
         const uint8_t* payload = &data[1];
@@ -850,36 +829,11 @@ namespace ant {
     }
 
     // Utility: escape string for JSON
-    std::string jsonEscape(const std::string& input) {
-        std::ostringstream oss;
-        for (const auto& c : input) {
-            switch (c) {
-                case '"':  oss << "\\\""; break;
-                case '\\': oss << "\\\\"; break;
-                case '\b': oss << "\\b";  break;
-                case '\f': oss << "\\f";  break;
-                case '\n': oss << "\\n";  break;
-                case '\r': oss << "\\r";  break;
-                case '\t': oss << "\\t";  break;
-                default:
-                    if (static_cast<unsigned char>(c) <= 0x1F) {
-                        oss << "\\u"
-                            << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(static_cast<unsigned char>(c));
-                    } else {
-                        oss << c;
-                    }
-            }
-        }
-        return oss.str();
-    }
-
-    // Helper to format a std::chrono::system_clock::time_point as ISO 8601 UTC string
-    std::string formatTimestamp(const std::chrono::system_clock::time_point& tp) {
-        std::time_t ts_time_t = std::chrono::system_clock::to_time_t(tp);
-        std::tm* tm_ptr = std::gmtime(&ts_time_t);
-        char tsBuf[25];
-        std::strftime(tsBuf, sizeof(tsBuf), "%FT%TZ", tm_ptr);
-        return {tsBuf};
+    // Fragment construction lives in ant_format.h so it can be tested without
+    // the ANT SDK. These keep the call sites in this file reading as they did.
+    using format::jsonEscape;
+    inline std::string formatTimestamp(const std::chrono::system_clock::time_point& tp) {
+        return format::timestamp(tp);
     }
 
     // Centralized Product output function
@@ -893,25 +847,13 @@ namespace ant {
                 info(text);
                 break;
             }
-            case OutputFormat::JSON: {
-                std::ostringstream oss;
-                oss << "{" << R"("page":")" << pageName << "\"," << text << "}";
-                std::cout << oss.str() << std::endl;
-                if (mqttCfg.enabled) {
-                    const std::string topic = mqttCfg.topic;
-                    if (!mqtt.publish(topic, oss.str())) {
-                        error("Failed to publish to MQTT topic [" + topic + "]");
-                    }
-                }
-                break;
-            }
+            case OutputFormat::JSON:
             case OutputFormat::CSV: {
-                std::ostringstream oss;
-                oss << pageName << "," << text;
-                std::cout << oss.str() << std::endl;
+                const std::string line = format::wrapPage(outputFormat, pageName, text);
+                std::cout << line << std::endl;
                 if (mqttCfg.enabled) {
                     const std::string topic = mqttCfg.topic;
-                    if (!mqtt.publish(mqttCfg.topic, oss.str())) {
+                    if (!mqtt.publish(topic, line)) {
                         error("Failed to publish to MQTT topic [" + topic + "]");
                     }
                 }
@@ -1065,126 +1007,27 @@ namespace ant {
         const std::string &text
     ){
 
-        // Always append age to text output for devices
-        std::string finalText = text;
-        std::ostringstream tmp;
-        tmp << finalText << " | age=" << std::fixed << std::setprecision(0) << age << "s";
-        finalText = tmp.str();
-
-        switch (outputFormat)
-        {
-            case OutputFormat::Text: {
-                info(finalText);
-                break;
-            }
-            case OutputFormat::JSON: {
-                std::ostringstream oss;
-                oss << R"("ts":")" << formatTimestamp(device->ts) << "\",";
-                oss << R"("name":")" << jsonEscape(!device->name.fName.empty() ? device->name.fName : device->name.uName) << "\",";
-                oss << R"("index":)" << static_cast<int>(device->index) << ",";
-                oss << R"("color":"0x)" << static_cast<int>(device->color) << "\",";
-                oss << R"("id":"0x)" << toHexByte(device->ext.deviceId.number) << "\",";
-                oss << R"("deviceType":"0x)" << toHexByte(device->ext.deviceId.dType) << "\",";
-                if (device->aType.has_value()) {
-                    oss << R"("assetType":)" << static_cast<int>(*device->aType) << ",";
-                } else {
-                    oss << R"("assetType":null,)";
-                }
-                oss << R"("assetTypeName":")" << describeAssetType(device->aType) << "\",";
-                oss << R"("lat":)" << device->lat << ",";
-                oss << R"("long":)" << device->lon << ",";
-                oss << R"("distance":)" << device->distance << ",";
-                oss << R"("heading":)" << std::fixed << std::setprecision(1) << device->headingDegrees << ",";
-                oss << R"("situation":")" << toAssetSituationString(device->situation) << "\",";
-                oss << R"("gpsLost":)" << (device->gpsLost ? "true" : "false") << ",";
-                oss << R"("commsLost":)" << (device->commsLost ? "true" : "false") << ",";
-                oss << R"("lowBattery":)" << (device->lowBattery ? "true" : "false") << ",";
-                oss << R"("remove":)" << (device->remove ? "true" : "false") << ",";
-                oss << R"("age":)" << std::fixed << std::setprecision(0) << age;
-                if (logLevel <= LogLevel::Info) {
-                    oss << R"(,"flags":"0x)" << toHexByte(device->ext.flags) << "\"";
-                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
-                }
-                output(pageName, oss.str());
-                break;
-            }
-            case OutputFormat::CSV: {
-                std::ostringstream oss;
-                // CSV: page,ts,name,index,deviceId,deviceType,assetType,lat,lon,distance,heading,situation,gpsLost,commsLost,lowBattery,remove,age,[flags,text]
-                oss << '"' << formatTimestamp(device->ts) << '"' << ","
-                    << '"' << (!device->name.fName.empty() ? device->name.fName : device->name.uName) << '"' << ","
-                    << static_cast<int>(device->index) << ","
-                    << "0x" << toHexByte(device->ext.deviceId.number) << ","
-                    << "0x" << toHexByte(device->ext.deviceId.dType) << ","
-                    << (device->aType.has_value() ? std::to_string(static_cast<int>(*device->aType)) : std::string()) << ","
-                    << device->lat << ","
-                    << device->lon << ","
-                    << device->distance << ","
-                    << std::fixed << std::setprecision(1) << device->headingDegrees << ","
-                    << '"' << toAssetSituationString(device->situation) << '"' << ","
-                    << (device->gpsLost ? 1 : 0) << ","
-                    << (device->commsLost ? 1 : 0) << ","
-                    << (device->lowBattery ? 1 : 0) << ","
-                    << (device->remove ? 1 : 0) << ","
-                    << std::fixed << std::setprecision(0) << age;
-
-                if (logLevel <= LogLevel::Info) {
-                    oss << ",0x" << toHexByte(device->ext.flags);
-                    oss << "," <<  '"' << text << '"';
-                }
-                output(pageName, oss.str());
-                break;
-            }
+        if (outputFormat == OutputFormat::Text) {
+            info(format::device(outputFormat, *device, age, text, logLevel <= LogLevel::Info));
+            return;
         }
+        output(pageName, format::device(outputFormat, *device, age, text, logLevel <= LogLevel::Info));
     }
 
-        // Centralized Device output function
+            // Centralized Device output function
     void outputHRM(
         const char* pageName,
         const HRM* hrm,
         const std::string &text
     ){
-
-        switch (outputFormat)
-        {
-            case OutputFormat::Text: {
-                info(text);
-                break;
-            }
-            case OutputFormat::JSON: {
-                std::ostringstream oss;
-                if (hrm->heartRate.has_value()) {
-                    oss << R"("heartRate":)" << static_cast<int>(*hrm->heartRate) << ",";
-                } else {
-                    oss << R"("heartRate":null,)";
-                }
-                oss << R"("heartBeatCount":)" << static_cast<int>(hrm->heartBeatCount) << ",";
-                oss << R"("heartBeatEventTime":)" << static_cast<int>(hrm->heartBeatEventTime);
-                if (logLevel <= LogLevel::Info) {
-                    oss << R"(,"flags":"0x)" << toHexByte(hrm->ext.flags) << "\"";
-                    oss << R"(,"text":")" << jsonEscape(text) << "\"";
-                }
-                output(pageName, oss.str());
-                break;
-            }
-            case OutputFormat::CSV: {
-                std::ostringstream oss;
-                // CSV: page,heartRate,heartBeatCount,heartBeatEventTime,[flags,text]
-                if (hrm->heartRate.has_value()) oss << static_cast<int>(*hrm->heartRate);
-                oss << "," << static_cast<int>(hrm->heartBeatCount)
-                    << "," << static_cast<int>(hrm->heartBeatEventTime);
-
-                if (logLevel <= LogLevel::Info) {
-                    oss << ",0x" << toHexByte(hrm->ext.flags);
-                    oss << "," <<  '"' << text << '"';
-                }
-                output(pageName, oss.str());
-                break;
-            }
+        if (outputFormat == OutputFormat::Text) {
+            info(text);
+            return;
         }
+        output(pageName, format::hrm(outputFormat, *hrm, text, logLevel <= LogLevel::Info));
     }
 
-    // Centralized Product output function
+        // Centralized Product output function
     void outputGeneric(
         const char* pageName,
         const std::string* payload,
@@ -1586,7 +1429,7 @@ namespace ant {
         if (device.lowBattery)  oss << " | Battery Low"; else oss << " | Battery OK";
         if (device.remove)      oss << " | Remove"; else oss << " | Keep";
 
-        oss << " | " << toAssetSituationString(device.situation)
+        oss << " | " << format::assetSituation(device.situation)
             << " | Flags: 0x" << toHexByte(device.ext.flags);
         if (isDeviceChannelIdExt(data)){
             oss << " | "<< formatDeviceChannelID(device.ext);
@@ -1656,7 +1499,7 @@ namespace ant {
         oss << "[CH] #" << std::to_string(channel) << ": "
             << "[ASSET/17] #" << static_cast<int>(device.index)
             << " | Full Name: " << device.name.fName
-            << " | Asset Type: " << describeAssetType(device.aType);
+            << " | Asset Type: " << format::assetType(device.aType);
 
         if (isDeviceChannelIdExt(data)){
             oss << " | "<< formatDeviceChannelID(device.ext);
