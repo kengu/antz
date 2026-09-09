@@ -235,4 +235,12 @@ add_executable(antz_decode_test tests/decode_test.cpp)
 target_include_directories(antz_decode_test PRIVATE src)
 target_compile_features(antz_decode_test PRIVATE cxx_std_20)
 
-add_test(NAME decode COMMAND antz_decode_test)
+# One CTest entry per group rather than one for the binary: a failure then
+# names the part of the spec that broke, and a group can be run alone.
+foreach(group
+        tracker.status_byte
+        tracker.asset_index
+        tracker.units
+        hrm.page_and_rate)
+    add_test(NAME ${group} COMMAND antz_decode_test ${group})
+endforeach()

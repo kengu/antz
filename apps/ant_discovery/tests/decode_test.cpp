@@ -10,6 +10,8 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <iterator>
 
 using namespace ant::decode;
 
@@ -120,11 +122,41 @@ static int heart_rate() {
     return 0;
 }
 
-int main() {
-    if (status_byte()) return 1;
-    if (asset_index()) return 1;
-    if (units())       return 1;
-    if (heart_rate())  return 1;
-    std::printf("ok — %d checks\n", checks);
+// Each group is registered with CTest separately, so a failure names the part
+// of the spec that broke and a group can be run on its own. With no argument
+// every group runs, which is what a bare ./antz_decode_test does.
+struct Group { const char* name; int (*run)(); };
+
+static const Group groups[] = {
+    { "tracker.status_byte", status_byte },
+    { "tracker.asset_index", asset_index },
+    { "tracker.units",       units       },
+    { "hrm.page_and_rate",   heart_rate  },
+};
+
+int main(const int argc, char** argv) {
+    if (argc > 2) {
+        std::printf("usage: %s [group]\n", argv[0]);
+        return 2;
+    }
+
+    if (argc == 2) {
+        for (const auto& [name, run] : groups) {
+            if (std::strcmp(name, argv[1]) == 0) {
+                if (run()) return 1;
+                std::printf("ok %s — %d checks\n", name, checks);
+                return 0;
+            }
+        }
+        std::printf("no such group: %s\n", argv[1]);
+        return 2;
+    }
+
+    for (const auto& [name, run] : groups) {
+        const int before = checks;
+        if (run()) return 1;
+        std::printf("ok %-22s %d checks\n", name, checks - before);
+    }
+    std::printf("ok — %d checks in %zu groups\n", checks, std::size(groups));
     return 0;
 }
