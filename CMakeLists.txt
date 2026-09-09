@@ -2,6 +2,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(antz LANGUAGES C CXX)
 
+
+# CTest. Tests live with the target that owns them; see apps/ant_discovery.
+# enable_testing() has to be here for ctest to see tests added in subdirectories.
+enable_testing()
 # Enable minimum cxx version (see docs/cxx-requirements.md)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -130,6 +130,7 @@ set(SRC_FILES
     src/mqtt.h
     src/usb_checker.cpp
     src/discovery.cpp
+    src/ant_decode.h
     src/logging.h
     src/ant_device.h
     src/ant_profiles.h
@@ -221,3 +222,17 @@ install(FILES ${CMAKE_SOURCE_DIR}/packaging/linux/conf/99-antz.rules
     DESTINATION lib/udev/rules.d
     COMPONENT udev
 )
+
+# ── Tests ──────────────────────────────────────────────────────────────────
+#
+# ant_decode.h holds the profile bit-decoding and depends on nothing but the
+# standard library, so these link neither the ANT SDK nor a dongle and run
+# anywhere. They are not installed and not part of the Debian package.
+#
+#   ctest --test-dir <build> --output-on-failure
+
+add_executable(antz_decode_test tests/decode_test.cpp)
+target_include_directories(antz_decode_test PRIVATE src)
+target_compile_features(antz_decode_test PRIVATE cxx_std_20)
+
+add_test(NAME decode COMMAND antz_decode_test)

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <optional>
+#include "ant_decode.h"
 #include <execinfo.h>
 #include <set>
 #include <string>
@@ -41,17 +42,8 @@ namespace ant {
         bool active = false;
     };
 
-    // Situation field of the Data Page 1 status byte, bits 0:2.
-    // TRK Device Profile Rev 1.0, Table 7-5. Values apply to a Dog asset;
-    // an Asset Tracker asset reports Undefined.
-    enum class AssetSituation {
-        Sitting = 0,
-        Moving = 1,
-        Pointed = 2,
-        Treed = 3,
-        Unknown = 4,
-        Undefined = 255,
-    };
+    // Defined in ant_decode.h so it can be tested without the ANT SDK.
+    using AssetSituation = decode::AssetSituation;
 
     struct RxTimestampInfo {
         // The Rx Timestamp is a 2 byte field (16-bit value) that rolls
@@ -151,7 +143,16 @@ namespace ant {
     };
 
     struct HRM {
-        uint8_t heartRate = 0;
+        // Absent when the monitor reported 0x00, which HRM Table 7 defines as
+        // invalid rather than as a rate of zero.
+        std::optional<uint8_t> heartRate{};
+
+        // HRM Table 7 bytes 4-6. The beat count is how a display tells a live
+        // rate from a repeated one: the spec allows the last reported rate to
+        // be re-sent while the count stands still.
+        uint16_t heartBeatEventTime = 0;
+        uint8_t  heartBeatCount = 0;
+
         ExtendedInfo ext;
     };
 
