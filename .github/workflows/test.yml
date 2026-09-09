@@ -1,0 +1,39 @@
+name: Test
+
+# Every push and pull request. The decode tests link neither the ANT SDK nor
+# mosquitto and need no dongle, so they run on a hosted runner in seconds —
+# unlike build-rpi4.yml, which is tag-triggered on a self-hosted ARM box.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get install -q -y cmake build-essential libmosquitto-dev libusb-1.0-0-dev pkg-config
+
+      - name: Configure
+        run: cmake -S . -B build -DANTZ_PLATFORM=linux -DCMAKE_BUILD_TYPE=Debug
+
+      # Tests first, so a decoding regression reports as one even if the
+      # application build fails for an unrelated reason.
+      - name: Build tests
+        run: cmake --build build --target antz_decode_test -j"$(nproc)"
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      # The RPI4 workflow only builds on a tag, so without this a compile
+      # break in discovery.cpp would go unnoticed until release.
+      - name: Build application
+        run: cmake --build build --target ant_discovery -j"$(nproc)"
