@@ -161,6 +161,11 @@ set(SRC_FILES
 
 add_executable(ant_discovery ${SRC_FILES})
 
+# The Tracker decode moved to antz_core (docs/architecture.md); ant_decode.h
+# is a shim over it, so the app links the library rather than carrying a
+# second copy of the parsing.
+target_link_libraries(ant_discovery PRIVATE antz_core)
+
 target_include_directories(ant_discovery PRIVATE
     src
     ${ANT_SDK_INCLUDE_DIRS}
@@ -233,12 +238,17 @@ install(FILES ${CMAKE_SOURCE_DIR}/packaging/linux/conf/99-antz.rules
 
 add_executable(antz_decode_test tests/decode_test.cpp)
 target_include_directories(antz_decode_test PRIVATE src)
+# The Tracker decode these tests cover now lives in antz_core; ant_decode.h is
+# a shim over it. The tests are unchanged on purpose — they are what proves
+# the refactor kept the behaviour they were written to pin.
+target_link_libraries(antz_decode_test PRIVATE antz_core)
 target_compile_features(antz_decode_test PRIVATE cxx_std_20)
 
 # The fragment builders need the app's structs, so this one also needs the ANT
 # SDK headers for its typedefs — headers only, nothing is linked.
 add_executable(antz_format_test tests/format_test.cpp)
 target_include_directories(antz_format_test PRIVATE src ${ANT_SDK_INCLUDE_DIRS})
+target_link_libraries(antz_format_test PRIVATE antz_core)
 target_compile_features(antz_format_test PRIVATE cxx_std_20)
 
 # One CTest entry per group rather than one for the binary: a failure then

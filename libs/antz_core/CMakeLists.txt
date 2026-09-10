@@ -12,6 +12,9 @@ add_library(antz_core STATIC
     src/profiles/antz_profile.cpp
     src/profiles/hrm/hrm_decoder.h
     src/profiles/hrm/hrm_decoder.cpp
+    src/profiles/tracker/tracker_pages.h
+    src/profiles/tracker/tracker_decoder.h
+    src/profiles/tracker/tracker_decoder.cpp
     src/logger/antz_logger.h
     src/logger/antz_logger.cpp
     src/error/antz_error.h

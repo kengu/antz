@@ -1,10 +1,20 @@
 //
 // Pure decoding for the ANT+ profiles this app speaks.
 //
+// **The Tracker half is now a thin shim over libs/antz_core.** Per
+// docs/architecture.md the parsers belong in antz_core/profiles/ and this app
+// is the legacy monolith they were refactored out of. The names stay so that
+// discovery.cpp and tests/decode_test.cpp are unchanged — which is the point:
+// the tests that found these bugs against real hardware now run against the
+// refactored module, and a behaviour change shows up as a test failure rather
+// than as a second implementation quietly drifting.
+//
+// The HRM half has not moved yet. antz_core has hrm_decoder for page 0 and
+// nothing for page 4, so folding this one into it would lose coverage.
+//
 // Header-only and free of the ANT SDK on purpose: everything here is
 // bit-twiddling over bytes already received, so it can be exercised without a
-// dongle, a channel or a link. discovery.cpp calls it; tests/decode_test.cpp
-// is the reason it is a separate header.
+// dongle, a channel or a link.
 //
 // References, cited per function:
 //   TRK — ANT+ Device Profile, Tracker, Rev 1.0 (D00001671)
@@ -17,49 +27,42 @@
 #include <cstdint>
 #include <optional>
 
+#include "profiles/tracker/tracker_decoder.h"
+#include "profiles/tracker/tracker_pages.h"
+
 namespace ant::decode {
 
 // ─── ANT+ Tracker ──────────────────────────────────────────────────────────
 
-// TRK Table 7-5. Values apply to a Dog asset; an Asset Tracker asset reports
-// Undefined. Only 0-4 are defined; 5-7 fall in the 3-bit field but name nothing.
+// TRK Table 7-5, as antz_core defines it. The enumerators keep their values,
+// so a caller comparing against the numeric wire value is unaffected.
 enum class AssetSituation : uint8_t {
-    Sitting   = 0,
-    Moving    = 1,
-    Pointed   = 2,
-    Treed     = 3,
-    Unknown   = 4,
-    Undefined = 255,
+    Sitting   = ANTZ_TRACKER_SITUATION_SITTING,
+    Moving    = ANTZ_TRACKER_SITUATION_MOVING,
+    Pointed   = ANTZ_TRACKER_SITUATION_POINTING,
+    Treed     = ANTZ_TRACKER_SITUATION_TREED,
+    Unknown   = ANTZ_TRACKER_SITUATION_UNKNOWN,
+    Undefined = ANTZ_TRACKER_SITUATION_UNDEFINED,
 };
 
-// TRK Table 7-4: situation occupies bits 0:2 of the Data Page 1 status byte.
-// A whole-byte 0xFF is the Asset Tracker case — Table 7-5 gives that asset type
-// Undefined, and 0xFF cannot fit the 3-bit field it would otherwise name.
 inline AssetSituation situation(const uint8_t statusByte) {
-    if (statusByte == 0xFF) return AssetSituation::Undefined;
-    const uint8_t v = statusByte & 0x07;
-    return v > static_cast<uint8_t>(AssetSituation::Unknown)
-        ? AssetSituation::Undefined
-        : static_cast<AssetSituation>(v);
+    return static_cast<AssetSituation>(antz::tracker_decode_status(statusByte).situation);
 }
 
-// TRK Table 7-4: low battery 3, GPS lost 4, communication lost 5, remove 6.
-inline bool lowBattery(const uint8_t s) { return (s & 0x08) != 0; }
-inline bool gpsLost(const uint8_t s)    { return (s & 0x10) != 0; }
-inline bool commsLost(const uint8_t s)  { return (s & 0x20) != 0; }
-inline bool removeFlag(const uint8_t s) { return (s & 0x40) != 0; }
+inline bool lowBattery(const uint8_t s) { return antz::tracker_decode_status(s).low_battery; }
+inline bool gpsLost(const uint8_t s)    { return antz::tracker_decode_status(s).gps_lost; }
+inline bool commsLost(const uint8_t s)  { return antz::tracker_decode_status(s).comms_lost; }
+inline bool removeFlag(const uint8_t s) { return antz::tracker_decode_status(s).remove; }
 
 // TRK Table 7-3: asset index is bits 0:4 of byte 1, so at most 32 assets.
 inline uint8_t assetIndex(const uint8_t b) { return b & 0x1F; }
 
-// TRK §8.1: degrees = semicircles / 2^31 * 180, signed two's complement.
 inline double semicirclesToDegrees(const int32_t semicircles) {
-    return static_cast<double>(semicircles) * (180.0 / 2147483648.0);
+    return antz::tracker_semicircles_to_degrees(semicircles);
 }
 
-// TRK §8.2: degrees = bradians / 256 * 360.
 inline double bradiansToDegrees(const uint8_t bradians) {
-    return static_cast<double>(bradians) * (360.0 / 256.0);
+    return antz::tracker_bradians_to_degrees(bradians);
 }
 
 // ─── ANT+ Heart Rate ───────────────────────────────────────────────────────
