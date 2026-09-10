@@ -29,7 +29,7 @@ typedef enum {
 typedef enum {
     ANTZ_TRACKER_SITUATION_SITTING  = 0,
     ANTZ_TRACKER_SITUATION_MOVING   = 1,
-    ANTZ_TRACKER_SITUATION_POINTING = 2,
+    ANTZ_TRACKER_SITUATION_POINTED = 2,
     ANTZ_TRACKER_SITUATION_TREED    = 3,
     ANTZ_TRACKER_SITUATION_UNKNOWN  = 4,
     // 5-7 fall inside the 3-bit field and name nothing, so they decode to

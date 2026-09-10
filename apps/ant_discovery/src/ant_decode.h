@@ -39,7 +39,7 @@ namespace ant::decode {
 enum class AssetSituation : uint8_t {
     Sitting   = ANTZ_TRACKER_SITUATION_SITTING,
     Moving    = ANTZ_TRACKER_SITUATION_MOVING,
-    Pointed   = ANTZ_TRACKER_SITUATION_POINTING,
+    Pointed   = ANTZ_TRACKER_SITUATION_POINTED,
     Treed     = ANTZ_TRACKER_SITUATION_TREED,
     Unknown   = ANTZ_TRACKER_SITUATION_UNKNOWN,
     Undefined = ANTZ_TRACKER_SITUATION_UNDEFINED,
