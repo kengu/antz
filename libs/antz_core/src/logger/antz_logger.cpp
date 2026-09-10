@@ -11,7 +11,13 @@ namespace antz {
     class StderrLogger final : public Logger {
     public:
         // Implementation of logf
-        void logf(const LogLevel level, int /*msg_id*/, const char* fmt, const va_list ap) override {
+        // `va_list ap`, not `const va_list ap`. On Darwin va_list is char*, so
+        // the const is top-level and ignored for the signature; on Linux it is
+        // __va_list_tag[1], which decays to a pointer and puts the const on the
+        // pointee — a different parameter type, no override, and an abstract
+        // class that will not instantiate. Builds clean on clang and fails on
+        // gcc, which is why it survived.
+        void logf(const LogLevel level, int /*msg_id*/, const char* fmt, va_list ap) override {
             auto level_str = "";
             switch (level) {
                 case LogLevel::Fine:    level_str = "[FINE] "; break;
