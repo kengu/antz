@@ -246,6 +246,15 @@ target_compile_features(antz_decode_test PRIVATE cxx_std_20)
 
 # The fragment builders need the app's structs, so this one also needs the ANT
 # SDK headers for its typedefs — headers only, nothing is linked.
+# Encoding, and the round trip it makes possible. The decoder has only ever
+# been tested against fixed points; encode-then-decode runs it over the
+# parameter space, which is where a mask or a sign error lives.
+add_executable(antz_encode_test tests/encode_test.cpp)
+target_include_directories(antz_encode_test PRIVATE src)
+target_link_libraries(antz_encode_test PRIVATE antz_core)
+target_compile_features(antz_encode_test PRIVATE cxx_std_20)
+add_test(NAME antz_encode COMMAND antz_encode_test)
+
 add_executable(antz_format_test tests/format_test.cpp)
 target_include_directories(antz_format_test PRIVATE src ${ANT_SDK_INCLUDE_DIRS})
 target_link_libraries(antz_format_test PRIVATE antz_core)

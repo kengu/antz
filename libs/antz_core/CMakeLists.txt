@@ -18,6 +18,8 @@ add_library(antz_core STATIC
     src/profiles/tracker/tracker_pages.h
     src/profiles/tracker/tracker_decoder.h
     src/profiles/tracker/tracker_decoder.cpp
+    src/profiles/tracker/tracker_encoder.h
+    src/profiles/tracker/tracker_encoder.cpp
     src/logger/antz_logger.h
     src/logger/antz_logger.cpp
     src/error/antz_error.h
