@@ -244,8 +244,6 @@ target_include_directories(antz_decode_test PRIVATE src)
 target_link_libraries(antz_decode_test PRIVATE antz_core)
 target_compile_features(antz_decode_test PRIVATE cxx_std_20)
 
-# The fragment builders need the app's structs, so this one also needs the ANT
-# SDK headers for its typedefs — headers only, nothing is linked.
 # Encoding, and the round trip it makes possible. The decoder has only ever
 # been tested against fixed points; encode-then-decode runs it over the
 # parameter space, which is where a mask or a sign error lives.
@@ -255,6 +253,8 @@ target_link_libraries(antz_encode_test PRIVATE antz_core)
 target_compile_features(antz_encode_test PRIVATE cxx_std_20)
 add_test(NAME antz_encode COMMAND antz_encode_test)
 
+# The fragment builders need the app's structs, so this one also needs the ANT
+# SDK headers for its typedefs — headers only, nothing is linked.
 add_executable(antz_format_test tests/format_test.cpp)
 target_include_directories(antz_format_test PRIVATE src ${ANT_SDK_INCLUDE_DIRS})
 target_link_libraries(antz_format_test PRIVATE antz_core)
@@ -274,7 +274,31 @@ endforeach()
 # One target that builds every test executable, so CI does not name them
 # individually — a workflow that builds one target and runs ctest reports a
 # missing binary as "Not Run", which is a green-looking way to skip a suite.
-add_custom_target(antz_tests DEPENDS antz_decode_test antz_format_test)
+#
+# Derived, not written down. The list was hand-maintained while the workflow
+# beside it said "antz_tests depends on every test executable, so a new test
+# needs no change here" — and the first test added after that comment was not
+# in the list, registered with ctest, never built, and reported Not Run. The
+# claim is true now.
+#
+# Everything in this directory whose target name ends `_test`, which is the
+# convention every test here already follows. Placed after the executables
+# because BUILDSYSTEM_TARGETS sees only what is defined above it.
+get_property(_antz_dir_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+set(_antz_test_targets "")
+foreach(_target ${_antz_dir_targets})
+    if(_target MATCHES "_test$")
+        list(APPEND _antz_test_targets ${_target})
+    endif()
+endforeach()
+if(NOT _antz_test_targets)
+    message(FATAL_ERROR
+        "antz_tests found no *_test targets. Either the naming convention "
+        "changed or this ran before they were defined; either way CI would "
+        "build nothing and ctest would report every test Not Run.")
+endif()
+message(STATUS "antz_tests builds: ${_antz_test_targets}")
+add_custom_target(antz_tests DEPENDS ${_antz_test_targets})
 
 foreach(group
         format.checker
