@@ -46,6 +46,22 @@ namespace antz {
     int tracker_decode_identification2(const uint8_t* raw, uint8_t len,
                                        antz_tracker_identification2_t* out);
 
+    // The handheld's own latitude (0x04) or longitude (0x05).
+    //
+    // Each page carries a whole signed semicircle value, unlike the asset
+    // location pages these sit beside — so there is nothing to reassemble and
+    // no partner page to wait for.
+    //
+    // **Refuses a byte 1 other than 0x00.** Only that value has been seen, and
+    // the field's meaning is unknown: it may be an index that happens to be
+    // zero for the tracker itself, or something else. Decoding an unobserved
+    // variant as a hunter's position is the kind of guess that produced this
+    // profile's four errata, so an unknown shape is rejected rather than read.
+    int tracker_decode_self_latitude(const uint8_t* raw, uint8_t len,
+                                     antz_tracker_self_position_t* out);
+    int tracker_decode_self_longitude(const uint8_t* raw, uint8_t len,
+                                      antz_tracker_self_position_t* out);
+
     // Assemble a latitude from the two halves the profile splits it across.
     // Signed, because semicircles are.
     int32_t tracker_latitude(uint16_t bits_0_15, uint16_t bits_16_31);

@@ -8,6 +8,7 @@
 #include "ant_decode.h"
 
 #include "profiles/common/common_decoder.h"
+#include "profiles/tracker/tracker_decoder.h"
 
 #include <cassert>
 #include <cmath>
@@ -180,12 +181,67 @@ static int common_pages() {
 
 struct Group { const char* name; int (*run)(); };
 
+// ─── Tracker: the handheld's own position, pages 0x04 and 0x05 ─────────────
+//
+// Undocumented — TRK Rev 1.0 §7.5 reserves 0x04-0x0F and a real Astro
+// transmits them anyway. So the assertions below are against **captured
+// hardware**, not against a synthesised page: these two payloads came off a
+// stationary Astro lying beside a phone whose own GNSS read
+// 59.733434, 10.132869 at that moment. The decode lands 9.8 m away, which is
+// not a coincidence at that precision.
+//
+// What is *not* established is deliberately not asserted as meaning: bytes
+// 1-3 were 0x00 and 0xFFFF in both samples and are carried out raw.
+static int self_position() {
+    // Off the wire, byte for byte.
+    const uint8_t lat_page[8] = { 0x04, 0x00, 0xff, 0xff, 0xd5, 0x27, 0x7a, 0x2a };
+    const uint8_t lon_page[8] = { 0x05, 0x00, 0xff, 0xff, 0x5b, 0xa0, 0x34, 0x07 };
+
+    antz_tracker_self_position_t lat{};
+    CHECK(antz::tracker_decode_self_latitude(lat_page, 8, &lat) == 0);
+    CHECK(lat.semicircles == 712648661);
+    CHECK(near(lat.semicircles * 180.0 / 2147483648.0, 59.733521, 1e-5));
+
+    antz_tracker_self_position_t lon{};
+    CHECK(antz::tracker_decode_self_longitude(lon_page, 8, &lon) == 0);
+    CHECK(lon.semicircles == 120889435);
+    CHECK(near(lon.semicircles * 180.0 / 2147483648.0, 10.132835, 1e-5));
+
+    // The unknowns are carried, not interpreted.
+    CHECK(lat.reserved_1 == 0x00 && lat.reserved_23 == 0xffff);
+    CHECK(lon.reserved_1 == 0x00 && lon.reserved_23 == 0xffff);
+
+    // Each page is a whole coordinate. Nothing to reassemble, and crossing the
+    // decoders is refused rather than silently producing a number.
+    CHECK(antz::tracker_decode_self_latitude(lon_page, 8, &lat) != 0);
+    CHECK(antz::tracker_decode_self_longitude(lat_page, 8, &lon) != 0);
+
+    // Signed. Read unsigned, a tracker west of Greenwich lands in the wrong
+    // hemisphere — which testing in Norway never shows you.
+    const uint8_t west[8] = { 0x05, 0x00, 0xff, 0xff, 0xa5, 0x5f, 0xcb, 0xf8 };
+    CHECK(antz::tracker_decode_self_longitude(west, 8, &lon) == 0);
+    CHECK(lon.semicircles < 0);
+
+    // An unobserved byte 1 is refused. Its meaning is unknown, and reading a
+    // variant we have never seen as somebody's position is the guess that
+    // produced this profile's four errata.
+    const uint8_t odd[8] = { 0x04, 0xe1, 0xff, 0xff, 0xd5, 0x27, 0x7a, 0x2a };
+    CHECK(antz::tracker_decode_self_latitude(odd, 8, &lat) != 0);
+
+    // Short buffers and nulls, as everywhere else here.
+    CHECK(antz::tracker_decode_self_latitude(lat_page, 7, &lat) != 0);
+    CHECK(antz::tracker_decode_self_latitude(nullptr, 8, &lat) != 0);
+    CHECK(antz::tracker_decode_self_latitude(lat_page, 8, nullptr) != 0);
+    return 0;
+}
+
 static const Group groups[] = {
     { "tracker.status_byte", status_byte },
     { "tracker.asset_index", asset_index },
     { "tracker.units",       units       },
     { "hrm.page_and_rate",   heart_rate  },
     { "common.pages_80_81",  common_pages },
+    { "tracker.self_position", self_position },
 };
 
 int main(const int argc, char** argv) {

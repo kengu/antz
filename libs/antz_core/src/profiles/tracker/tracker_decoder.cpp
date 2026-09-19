@@ -121,4 +121,46 @@ namespace antz {
         return static_cast<double>(bradians) * (360.0 / 256.0);
     }
 
+
+    //
+    // Pages 0x04 and 0x05 — the handheld's own position.
+    //
+    // One decoder behind both, because the layout is identical and the page
+    // number is the only thing that says which coordinate it is. Splitting it
+    // in two would be two places for the signedness to be got wrong.
+    //
+    static int decode_self_position(const uint8_t* raw, uint8_t len, uint8_t want_page,
+                                    antz_tracker_self_position_t* out)
+    {
+        if (raw == nullptr || out == nullptr || len < 8) return -1;
+        if (raw[0] != want_page) return -1;
+        // Only 0x00 has been observed here, and what the field means is
+        // unknown. Refusing the rest keeps a variant we have not seen from
+        // being read as somebody's position.
+        if (raw[1] != 0x00) return -1;
+
+        out->reserved_1  = raw[1];
+        out->reserved_23 = static_cast<uint16_t>(raw[2] | (raw[3] << 8));
+        // Signed, little-endian. Read unsigned, a tracker west of Greenwich
+        // lands in the wrong hemisphere — which Norway never shows you.
+        out->semicircles = static_cast<int32_t>(
+            static_cast<uint32_t>(raw[4]) |
+            (static_cast<uint32_t>(raw[5]) << 8) |
+            (static_cast<uint32_t>(raw[6]) << 16) |
+            (static_cast<uint32_t>(raw[7]) << 24));
+        return 0;
+    }
+
+    int tracker_decode_self_latitude(const uint8_t* raw, uint8_t len,
+                                     antz_tracker_self_position_t* out)
+    {
+        return decode_self_position(raw, len, ANTZ_TRACKER_PAGE_SELF_LATITUDE, out);
+    }
+
+    int tracker_decode_self_longitude(const uint8_t* raw, uint8_t len,
+                                      antz_tracker_self_position_t* out)
+    {
+        return decode_self_position(raw, len, ANTZ_TRACKER_PAGE_SELF_LONGITUDE, out);
+    }
+
 } // namespace antz

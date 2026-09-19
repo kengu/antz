@@ -20,6 +20,19 @@ typedef enum {
     ANTZ_TRACKER_PAGE_LOCATION_1     = 0x01, // Asset Location 1
     ANTZ_TRACKER_PAGE_LOCATION_2     = 0x02, // Asset Location 2
     ANTZ_TRACKER_PAGE_NO_ASSETS      = 0x03, // Connected, empty roster
+    // The handheld's own position, one whole coordinate per page.
+    //
+    // TRK Rev 1.0 §7.5 calls 0x04-0x0F "Reserved for Future Use" and a real
+    // Garmin Astro transmits these steadily anyway — about a ninth of the
+    // asset location rate, always as a pair. Not the Garmin Ranging profile
+    // either (D0001697 uses 0x10/0x30/0x31/0xF0).
+    //
+    // Worth having because the profile gives a display every asset's position
+    // and never the tracker's, while asset distance and bearing are measured
+    // *from* the tracker. Without these, a Gateway can say where every dog is
+    // and not where the hunter is.
+    ANTZ_TRACKER_PAGE_SELF_LATITUDE  = 0x04,
+    ANTZ_TRACKER_PAGE_SELF_LONGITUDE = 0x05,
     ANTZ_TRACKER_PAGE_IDENTIFICATION_1 = 0x10, // Colour and first name bytes
     ANTZ_TRACKER_PAGE_IDENTIFICATION_2 = 0x11, // Asset type and rest of name
     ANTZ_TRACKER_PAGE_DISCONNECT     = 0x20, // Channel closing
@@ -87,3 +100,23 @@ typedef struct {
     uint8_t asset_type;
     char    name[6];
 } antz_tracker_identification2_t;
+
+//
+// The handheld's own latitude or longitude (pages 0x04 and 0x05).
+//
+// Deliberately NOT named location1/location2. Those split one coordinate
+// across two pages — Page 1 carries bits 0:15 and Page 2 bits 16:31 — and
+// these do not: each carries a whole signed semicircle value. Naming them
+// alike would invite exactly the reassembly that is wrong here.
+//
+// Undocumented, so what is known is separated from what is not. The
+// coordinate is established: two payloads off a stationary Astro decoded to
+// 9.8 m from the phone lying beside it, which is not a coincidence at that
+// precision. `reserved_1` and `reserved_23` are not: they were 0x00 and
+// 0xFFFF in both samples and are carried out raw rather than assumed.
+//
+typedef struct {
+    int32_t  semicircles;   // Signed. Unsigned reads land in the wrong hemisphere.
+    uint8_t  reserved_1;    // Byte 1. Only 0x00 observed; not known to be constant.
+    uint16_t reserved_23;   // Bytes 2-3. Only 0xFFFF observed.
+} antz_tracker_self_position_t;
