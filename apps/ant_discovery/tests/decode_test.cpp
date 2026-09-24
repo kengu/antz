@@ -128,7 +128,7 @@ static int heart_rate() {
 // Each group is registered with CTest separately, so a failure names the part
 // of the spec that broke and a group can be run on its own. With no argument
 // every group runs, which is what a bare ./antz_decode_test does.
-// ─── Common Data Pages 80 and 81, D00001198 ───────────────────────────────
+// ─── Common Data Pages 80, 81 and 82, D00001198 ───────────────────────────────
 //
 // Not in ant_decode.h: these are common to every ANT+ profile rather than to
 // the Tracker, so they live in antz_core beside the profiles. Tested here
@@ -176,6 +176,50 @@ static int common_pages() {
     CHECK(antz::common_decode_manufacturer(page80, 8, nullptr) != 0);
     CHECK(antz::common_decode_manufacturer(page80, 7, &mfg) != 0);
     CHECK(antz::common_decode_product(page81, 7, &product) != 0);
+
+    // Page 82, captured off hardware on 2026-09-24: each handheld's own
+    // battery, and each reading matches that unit's chemistry.
+    // Alpha 10, internal lithium cell: 3 + 0xC5/256 = 3.77 V, status 3 (ok).
+    const uint8_t alpha[8] = { 0x52, 0xFF, 0xFF, 0x65, 0x0A, 0x00, 0xC5, 0xB3 };
+    antz_common_battery_t battery{};
+    CHECK(antz::common_decode_battery(alpha, 8, &battery) == 0);
+    CHECK(!battery.identifier_valid);
+    CHECK(battery.voltage_valid);
+    CHECK(battery.voltage_v > 3.769f && battery.voltage_v < 3.771f);
+    CHECK(battery.status_valid);
+    CHECK(battery.status == ANTZ_BATTERY_STATUS_OK);
+    // Every field as sent: 0x000A65 ticks at 2 s (bit 7 of byte 7 set),
+    // coarse 3 and fractional 0xC5.
+    CHECK(battery.operating_time_ticks == 0x000A65u);
+    CHECK(battery.operating_time_resolution_s == 2u);
+    CHECK(battery.operating_time_s == 0x000A65u * 2u);
+    CHECK(battery.voltage_coarse == 3u);
+    CHECK(battery.voltage_fractional == 0xC5u);
+
+    // Astro 320, two AA cells: 2 + 0x97/256 = 2.59 V, status 2 (good).
+    const uint8_t astro[8] = { 0x52, 0xFF, 0xFF, 0x5D, 0x0A, 0x00, 0x97, 0xA2 };
+    CHECK(antz::common_decode_battery(astro, 8, &battery) == 0);
+    CHECK(battery.voltage_v > 2.589f && battery.voltage_v < 2.591f);
+    CHECK(battery.status == ANTZ_BATTERY_STATUS_GOOD);
+
+    // Coarse volts 0x0F and status 7 are refusals, each on its own: a
+    // decoder testing the value would report fifteen volts.
+    const uint8_t none[8] = { 0x52, 0xFF, 0x21, 0x00, 0x00, 0x00, 0x00, 0x7F };
+    CHECK(antz::common_decode_battery(none, 8, &battery) == 0);
+    CHECK(!battery.voltage_valid);
+    CHECK(battery.voltage_coarse == 0x0Fu);
+    CHECK(battery.voltage_v == 0.0f);
+    CHECK(!battery.status_valid);
+    CHECK(battery.status == ANTZ_BATTERY_STATUS_INVALID);
+    // Bit 7 clear: the operating time counts in 16 s ticks.
+    CHECK(battery.operating_time_resolution_s == 16u);
+    CHECK(battery.identifier_valid);
+    CHECK(battery.battery_count == 1);
+    CHECK(battery.battery_identifier == 2);
+
+    CHECK(antz::common_decode_battery(page80, 8, &battery) != 0);
+    CHECK(antz::common_decode_battery(alpha, 7, &battery) != 0);
+    CHECK(antz::common_decode_battery(nullptr, 8, &battery) != 0);
     return 0;
 }
 

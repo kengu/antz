@@ -25,4 +25,7 @@ namespace antz {
     int common_decode_product(const uint8_t* raw, uint8_t len,
                               antz_common_product_t* out);
 
+    int common_decode_battery(const uint8_t* raw, uint8_t len,
+                              antz_common_battery_t* out);
+
 } // namespace antz
