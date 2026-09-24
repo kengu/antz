@@ -23,10 +23,33 @@
 #include <stdint.h>
 
 typedef enum {
+    ANTZ_COMMON_PAGE_REQUEST_DATA = 0x46, // Page 70, request data page
     ANTZ_COMMON_PAGE_MANUFACTURER = 0x50, // Page 80, manufacturer identification
     ANTZ_COMMON_PAGE_PRODUCT      = 0x51, // Page 81, product information
     ANTZ_COMMON_PAGE_BATTERY      = 0x52, // Page 82, battery status
 } antz_common_page_e;
+
+// Page 70's command type, byte 7. Other values are reserved.
+typedef enum {
+    ANTZ_REQUEST_DATA_PAGE            = 1, // one page, from a master
+    ANTZ_REQUEST_ANT_FS_SESSION       = 2,
+    ANTZ_REQUEST_DATA_PAGE_FROM_SLAVE = 3, // the only type that names a slave serial
+    ANTZ_REQUEST_DATA_PAGE_SET        = 4, // a set a profile defines
+} antz_request_command_e;
+
+// Page 70. A display asking a master for a page; the one common page a
+// display sends. Each field as the page carries it: 0xFFFF and 0xFF are the
+// invalid values for the serial and the descriptors, which is what a
+// request for a page without subfields sends.
+typedef struct {
+    uint16_t slave_serial;        // bytes 1-2; 0xFFFF unless command type 3
+    uint8_t  descriptor_1;        // byte 3; 0xFF when the page has no subfields
+    uint8_t  descriptor_2;        // byte 4
+    uint8_t  transmit_count;      // byte 5 bits 0-6: times to send it, 1-127
+    bool     acknowledged;        // byte 5 bit 7: reply with acknowledged messages
+    uint8_t  requested_page;      // byte 6
+    uint8_t  command_type;        // byte 7, an antz_request_command_e
+} antz_common_request_t;
 
 // Page 82's battery status, bits 4-6 of byte 7. 0 and 6 are reserved.
 typedef enum {

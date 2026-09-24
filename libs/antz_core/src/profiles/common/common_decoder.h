@@ -28,4 +28,8 @@ namespace antz {
     int common_decode_battery(const uint8_t* raw, uint8_t len,
                               antz_common_battery_t* out);
 
+    // Page 70, for a device answering requests or a tool reading them.
+    int common_decode_request_data_page(const uint8_t* raw, uint8_t len,
+                                        antz_common_request_t* out);
+
 } // namespace antz

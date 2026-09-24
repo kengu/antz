@@ -13,6 +13,8 @@ add_library(antz_core STATIC
     src/profiles/common/common_pages.h
     src/profiles/common/common_decoder.h
     src/profiles/common/common_decoder.cpp
+    src/profiles/common/common_encoder.h
+    src/profiles/common/common_encoder.cpp
     src/profiles/hrm/hrm_decoder.h
     src/profiles/hrm/hrm_decoder.cpp
     src/profiles/tracker/tracker_pages.h

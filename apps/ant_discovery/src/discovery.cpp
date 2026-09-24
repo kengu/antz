@@ -21,6 +21,7 @@
 #include "hrm_discovery.h"
 #include "asset_tracker_discovery.h"
 #include "config.h"
+#include "profiles/tracker/tracker_encoder.h"
 #include "mqtt.h"
 #include "logging.h"
 #include "ant_format.h"
@@ -1200,16 +1201,10 @@ namespace ant {
     // - ANT+ Device Profile – Tracker Rev. 1.0 (Section 4.3.5, 4.4.3)
     // -----------------------------------------------------------------------------
     void requestAssetIdentification(const uint8_t channel, const Device& device) {
-        uint8_t request[8] = {
-            PAGE_REQUEST,           // Page 70
-            0xFF,                   // Reserved
-            0xFF,                   // Reserved
-            0xFF,                   // Descriptor Byte 1
-            0xFF,                   // Descriptor Byte 2
-            0x01,                   // Transmit once
-            PAGE_IDENTIFICATION_1,  // Requested Page: Asset Identification Page 1 (0x10)
-            0x04                    // Command type: Page Set (answers with 0x10 og 0x11)
-        };
+        // Page 16 goes as a page set, which the tracker answers with 16 and 17
+        // for every asset — antz applies TRK §7.10.1's rule.
+        uint8_t request[8];
+        if (antz::tracker_encode_request(PAGE_IDENTIFICATION_1, 1, request, sizeof(request)) != 0) return;
 
         if (sendRequestDataPage(channel, request)) {
             std::ostringstream oss;
@@ -1221,16 +1216,8 @@ namespace ant {
     }
 
     void requestPage(const uint8_t channel, const uint8_t page, const std::string& prefix="", const std::string& suffix_ ="") {
-        uint8_t request[8] = {
-            PAGE_REQUEST,       // Page 70
-            0xFF,               // Reserved
-            0xFF,               // Reserved
-            0xFF,               // Descriptor Byte 1
-            0xFF,               // Descriptor Byte 2
-            0x01,               // Transmit once
-            page,               // Requested Page
-            0x01                // Command type: Single Page
-        };
+        uint8_t request[8];
+        if (antz::tracker_encode_request(page, 1, request, sizeof(request)) != 0) return;
 
         if (sendRequestDataPage(channel, request)) {
             std::ostringstream oss;

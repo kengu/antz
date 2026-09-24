@@ -70,6 +70,15 @@ namespace antz {
     int tracker_encode_no_assets(uint8_t* out, uint8_t len);
     int tracker_encode_disconnect(uint8_t* out, uint8_t len);
 
+    // A display's Common Page 70 request to an asset tracker, by the Tracker
+    // profile's rule (TRK §7.10.1): data page 16 is requested with command
+    // type 4, and the tracker answers with pages 16 and 17 for every asset;
+    // every other page with command type 1 [SD_0014]. Serial and descriptors
+    // invalid, broadcast replies. `transmit_count` is how many times the page
+    // should be sent, 1-127. Same refusals as common_encode_request_data_page.
+    int tracker_encode_request(uint8_t requested_page, uint8_t transmit_count,
+                               uint8_t* out, uint8_t len);
+
     // Split a latitude back into the halves the profile spreads across the
     // two Asset Location pages — the inverse of tracker_latitude.
     void tracker_latitude_split(int32_t latitude, uint16_t* bits_0_15,

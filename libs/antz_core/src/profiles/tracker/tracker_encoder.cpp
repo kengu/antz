@@ -1,5 +1,7 @@
 #include "tracker_encoder.h"
 
+#include "../common/common_encoder.h"
+
 #include <cstring>
 
 #include "data/antz_bytes.h"
@@ -151,6 +153,21 @@ namespace antz {
         const uint32_t raw = static_cast<uint32_t>(latitude);
         if (bits_0_15)  *bits_0_15  = static_cast<uint16_t>(raw & 0xFFFF);
         if (bits_16_31) *bits_16_31 = static_cast<uint16_t>(raw >> 16 & 0xFFFF);
+    }
+
+    int tracker_encode_request(const uint8_t requested_page, const uint8_t transmit_count,
+                               uint8_t* out, const uint8_t len) {
+        antz_common_request_t request{};
+        request.slave_serial = 0xFFFF;
+        request.descriptor_1 = 0xFF;
+        request.descriptor_2 = 0xFF;
+        request.transmit_count = transmit_count;
+        request.acknowledged = false;
+        request.requested_page = requested_page;
+        request.command_type = requested_page == ANTZ_TRACKER_PAGE_IDENTIFICATION_1
+            ? ANTZ_REQUEST_DATA_PAGE_SET
+            : ANTZ_REQUEST_DATA_PAGE;
+        return common_encode_request_data_page(&request, out, len);
     }
 
 } // namespace antz

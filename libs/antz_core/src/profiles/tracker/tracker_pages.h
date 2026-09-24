@@ -22,8 +22,9 @@ typedef enum {
     ANTZ_TRACKER_PAGE_NO_ASSETS      = 0x03, // Connected, empty roster
     // The handheld's own position, one whole coordinate per page.
     //
-    // TRK Rev 1.0 §7.5 calls 0x04-0x0F "Reserved for Future Use" and a real
-    // Garmin Astro transmits these steadily anyway — about a ninth of the
+    // TRK Rev 1.0 §7.5 calls 0x04-0x0F "Reserved for Future Use" and some
+    // Garmin handhelds transmit these steadily anyway — an Alpha 10 does, an
+    // Astro 320 never does — about a ninth of the
     // asset location rate, always as a pair. Not the Garmin Ranging profile
     // either (D0001697 uses 0x10/0x30/0x31/0xF0).
     //
@@ -110,9 +111,10 @@ typedef struct {
 // alike would invite exactly the reassembly that is wrong here.
 //
 // Undocumented, so what is known is separated from what is not. The
-// coordinate is established: two payloads off a stationary Astro decoded to
-// 9.8 m from the phone lying beside it, which is not a coincidence at that
-// precision. `reserved_1` and `reserved_23` are not: they were 0x00 and
+// coordinate is established: two payloads off a stationary Garmin handheld
+// (model not recorded) decoded to 9.8 m from the phone lying beside it, which
+// is not a coincidence at that precision. Not every handheld sends them: an
+// Alpha 10 does, and an Astro 320 never did in any capture. `reserved_1` and `reserved_23` are not: they were 0x00 and
 // 0xFFFF in both samples and are carried out raw rather than assumed.
 //
 typedef struct {

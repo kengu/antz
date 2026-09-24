@@ -17,6 +17,8 @@
 //
 #include "profiles/tracker/tracker_encoder.h"
 #include "profiles/tracker/tracker_decoder.h"
+#include "profiles/common/common_encoder.h"
+#include "profiles/common/common_decoder.h"
 
 #include <cassert>
 #include <cstdio>
@@ -341,6 +343,63 @@ static void what_the_encoder_refuses() {
     CHECK(tracker_encode_disconnect(page, 7) != 0);
 }
 
+// Common Page 70 and the Tracker profile's rule for it. The two payloads are
+// the vectors common70-request-identification-set and
+// common70-request-battery in streamdog-platform.
+static void a_request_follows_the_tracker_profile() {
+    // TRK §7.10.1: page 16 with command type 4, and the tracker answers with
+    // 16 and 17 for every asset.
+    const uint8_t want_set[8]  = { 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0x10, 0x04 };
+    // Every other page with command type 1 [SD_0014].
+    const uint8_t want_page[8] = { 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0x52, 0x01 };
+    uint8_t got[8] = {};
+    CHECK(tracker_encode_request(0x10, 4, got, sizeof(got)) == 0);
+    CHECK(bytes_eq(got, want_set, 8));
+    if (!bytes_eq(got, want_set, 8)) show("request 16", got, want_set);
+    CHECK(tracker_encode_request(0x52, 4, got, sizeof(got)) == 0);
+    CHECK(bytes_eq(got, want_page, 8));
+    if (!bytes_eq(got, want_page, 8)) show("request 82", got, want_page);
+    CHECK(tracker_encode_request(0x50, 4, got, sizeof(got)) == 0);
+    CHECK(got[6] == 0x50 && got[7] == ANTZ_REQUEST_DATA_PAGE);
+}
+
+static void a_request_round_trips_every_field() {
+    antz_common_request_t in{};
+    in.slave_serial = 0x1234;
+    in.descriptor_1 = 7;
+    in.descriptor_2 = 9;
+    in.transmit_count = 0x7F;
+    in.acknowledged = true;
+    in.requested_page = 0x54;
+    in.command_type = ANTZ_REQUEST_DATA_PAGE_FROM_SLAVE;
+    uint8_t page[8] = {};
+    CHECK(common_encode_request_data_page(&in, page, sizeof(page)) == 0);
+    CHECK(page[1] == 0x34 && page[2] == 0x12);  // little-endian
+    CHECK(page[5] == 0xFF);                     // 127 times, acknowledged
+    antz_common_request_t out{};
+    CHECK(common_decode_request_data_page(page, sizeof(page), &out) == 0);
+    CHECK(out.slave_serial == 0x1234);
+    CHECK(out.descriptor_1 == 7 && out.descriptor_2 == 9);
+    CHECK(out.transmit_count == 0x7F && out.acknowledged);
+    CHECK(out.requested_page == 0x54);
+    CHECK(out.command_type == ANTZ_REQUEST_DATA_PAGE_FROM_SLAVE);
+}
+
+static void what_the_request_encoder_refuses() {
+    uint8_t page[8];
+    std::memset(page, 0xAA, sizeof(page));
+    // Zero times is byte 5's invalid value; 128 would set the ack bit.
+    CHECK(tracker_encode_request(0x50, 0, page, sizeof(page)) != 0);
+    CHECK(tracker_encode_request(0x50, 128, page, sizeof(page)) != 0);
+    CHECK(tracker_encode_request(0x50, 1, page, 7) != 0);
+    CHECK(tracker_encode_request(0x50, 1, nullptr, 8) != 0);
+    antz_common_request_t bad{};
+    bad.transmit_count = 1;
+    bad.command_type = 5;  // reserved
+    CHECK(common_encode_request_data_page(&bad, page, sizeof(page)) != 0);
+    for (const unsigned char byte : page) CHECK(byte == 0xAA);
+}
+
 static void a_refused_encode_leaves_the_buffer_alone() {
     uint8_t page[8];
     std::memset(page, 0xAA, sizeof(page));
@@ -370,6 +429,10 @@ int main() {
 
     what_the_encoder_refuses();
     a_refused_encode_leaves_the_buffer_alone();
+
+    a_request_follows_the_tracker_profile();
+    a_request_round_trips_every_field();
+    what_the_request_encoder_refuses();
 
     if (failures == 0) {
         std::printf("ok — %d checks\n", checks);

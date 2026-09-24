@@ -44,6 +44,20 @@ namespace antz {
         return 0;
     }
 
+    int common_decode_request_data_page(const uint8_t* raw, const uint8_t len,
+                                        antz_common_request_t* out) {
+        if (!raw || !out || len < 8) return -1;
+        if (raw[0] != ANTZ_COMMON_PAGE_REQUEST_DATA) return -1;
+        out->slave_serial   = bytes_to_uint16(&raw[1]);
+        out->descriptor_1   = raw[3];
+        out->descriptor_2   = raw[4];
+        out->transmit_count = raw[5] & 0x7F;
+        out->acknowledged   = (raw[5] & 0x80) != 0;
+        out->requested_page = raw[6];
+        out->command_type   = raw[7];
+        return 0;
+    }
+
     int common_decode_battery(const uint8_t* raw, const uint8_t len,
                               antz_common_battery_t* out) {
         if (!raw || !out || len < 8) return -1;
