@@ -95,7 +95,7 @@ This section evaluates alternative approaches to using the nRF5 SDK with SoftDev
 
 Garmin has released an ANT protocol stack for **nRF Connect SDK (NCS)**, enabling ANT+ support inside Zephyr-based environments. This allows BLE + Thread + ANT+ integration within a single RTOS application.
 
-See: [Garmin ANT Protocol Stack for nRF Connect SDK – Getting Started](https://www.thisisant.com/APIassets/ANTnRFConnectDoc/doc/getting_started.html)
+See: [Garmin ANT Program](https://developer.garmin.com/ant-program) (the former thisisant.com nRF Connect getting-started guide now redirects here)
 
 **Pros:**
 
